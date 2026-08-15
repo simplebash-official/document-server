@@ -1,0 +1,114 @@
+{
+  "info": {
+    "_postman_id": "0883660c-a4fe-456e-9da8-aa21dd56016c",
+    "name": "pdf-server",
+    "description": "Standalone Rust/Axum service that renders PDFs from Typst templates. **No authentication** — every route here is open, so there is no Bearer/API-key setup needed.\n\nBase URL (and a sample `templateKey`) are environment variables — switch the active Postman environment (Development/Production) to point requests at the right instance.\n\n**Phase 1 status**: only `Render`'s `POST /{templateKey}` does real work beyond a status stub — `Templates` and `Documents` currently each expose only a `GET /` module-status stub (their real read routes are Phase 2/3 work), so this collection reflects exactly what's implemented today.\n\n**Getting a real `{{templateKey}}`**: the seed `invoice` template is created automatically the first time the server starts (see `templates/invoice.typ`). Since `GET /api/templates`'s real listing endpoint isn't built yet, read it directly from the SQLite database — `sqlite3 pdf_server.db \"SELECT key, name FROM templates;\"` (path per that instance's `DATABASE_URL`) — then set the environment's `templateKey` variable to that value.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "health"]
+            },
+            "description": "Liveness check — always returns 200 if the process is up and able to handle a request at all. Doesn't touch SQLite or the render engine, so it can't distinguish \"server up, database down\"."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Render",
+      "item": [
+        {
+          "name": "Render Module Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/render",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "render"]
+            },
+            "description": "Trivial \"is this module wired up\" check — not a health/readiness probe."
+          },
+          "response": []
+        },
+        {
+          "name": "Render Invoice",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/render/{{templateKey}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "render", "{{templateKey}}"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceNumber\": \"INV-0001\",\n  \"customerName\": \"Jane Doe\",\n  \"items\": [\n    { \"description\": \"Widget\", \"quantity\": 2, \"unitPrice\": 9.99 },\n    { \"description\": \"Gadget\", \"quantity\": 1, \"unitPrice\": 19.99 }\n  ],\n  \"total\": 39.97\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Compiles the `invoice` template (see `templates/invoice.typ`'s header comment for its full JSON contract) against this request body and returns the rendered PDF as raw bytes — `Content-Type: application/pdf`, **not** the usual `{success, data, message}` envelope every other endpoint in this collection uses. Postman will offer to preview or save the response as a PDF.\n\nErrors still go through the standard envelope: 404 `TEMPLATE_NOT_FOUND` for an unknown/inactive `{{templateKey}}`, 422 `RENDER_VALIDATION_FAILED` if the body doesn't satisfy the template's data contract, 500 `PDF_EXPORT_FAILED` on export failure."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Templates",
+      "item": [
+        {
+          "name": "Templates Module Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/templates",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "templates"]
+            },
+            "description": "Phase 1 status stub only — the real `GET /` (list templates) and `GET /{key}` (get one template's metadata/data-contract) read routes are Phase 2 work, not built yet."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Documents",
+      "item": [
+        {
+          "name": "Documents Module Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/documents",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "documents"]
+            },
+            "description": "Phase 1 status stub only — the real `GET /` (list rendered documents), `GET /{key}` (get one record), and `GET /{key}/pdf` (reprint) read routes are Phase 3 work, not built yet. Every successful `Render Invoice` call already writes a row here — see the `documents` table in SQLite."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

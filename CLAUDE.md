@@ -83,6 +83,10 @@ No joins are used, and none are expected to be needed: a `documents` row's `temp
 
 Same `utoipa`/`utoipa-axum`/`utoipa-swagger-ui` setup as jana2u-pos — Swagger at `/docs`, raw spec at `/api-docs/openapi.json`. Every handler must be registered via `routes!(...)` inside a module's `router()` — never plain `axum::routing::get/post` — since only `routes!()`-registered handlers get collected into the spec. **Exception to watch for**: `POST /api/render/{templateKey}`'s `#[utoipa::path]` declares its 200 response as `content_type = "application/pdf", body = Vec<u8>` instead of the usual `ApiResponse<T>` schema — this is deliberate (see above), do not "fix" it to look like every other handler.
 
+### Postman collection (`postman/`)
+
+`pdf-server.postman_collection.json` (one folder per module, mirroring the spec's Phase 1/2/3 route-surface notes above) plus `development.postman_environment.json`/`production.postman_environment.json` (each holding `baseUrl` and a sample `templateKey`). Hand-maintained — update it in the same change as any route addition, same convention as `../backend/postman/`. Unlike that collection, there's no `accessToken`/Bearer auth variable here — nothing in this service needs one.
+
 ## Testing
 
 Four tiers, no external service needed for any of them (a deliberate improvement over jana2u-pos's Mongo-backed test suite — no database process to start before running `cargo test`):
