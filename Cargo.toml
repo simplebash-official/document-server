@@ -1,0 +1,42 @@
+[package]
+name = "pdf_server"
+version = "0.1.0"
+edition = "2024"
+default-run = "pdf_server"
+
+[dependencies]
+axum = "0.8.9"
+chrono = { version = "0.4.45", features = ["serde"] }
+dotenvy = "0.15.7"
+nanoid = "0.5.0"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+# `sqlite` bundles and compiles SQLite from source (no system libsqlite3
+# needed). `macros` is only for the `#[derive(sqlx::FromRow)]` proc macro —
+# every query itself is a plain runtime-checked `sqlx::query[_as]` call, not
+# the `query!`/`query_as!` compile-time-checked macros, so no `DATABASE_URL`
+# is needed at build time.
+sqlx = { version = "0.9.0", default-features = false, features = ["runtime-tokio", "sqlite", "chrono", "json", "macros"] }
+thiserror = "2.0.19"
+tokio = { version = "1.53.1", features = ["full"] }
+tower = { version = "0.5.3", features = ["util"] }
+tower-http = { version = "0.7.0", features = ["cors", "trace"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+utoipa = { version = "5.5.0", features = ["axum_extras", "chrono"] }
+utoipa-axum = "0.2.0"
+utoipa-swagger-ui = { version = "9.0.2", features = ["axum"] }
+typst-as-lib = "0.16.0"
+typst = "0.15"
+typst-pdf = "0.15"
+# `typst_pdf::pdf()` takes a `&typst_layout::PagedDocument` — that type is
+# defined in this crate, not re-exported through the `typst` facade, so it
+# must be a direct dependency to be nameable in our own code.
+typst-layout = "0.15"
+
+[dev-dependencies]
+# Gives every `tests::common::spawn_app()` call its own throwaway SQLite
+# file, auto-deleted on drop — tests are isolated from each other and need
+# no external database service at all (unlike the Mongo-backed setup this
+# replaced).
+tempfile = "3"
