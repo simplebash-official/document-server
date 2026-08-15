@@ -10,7 +10,7 @@ use serde_json::json;
 #[tokio::test]
 async fn test_success_response_format() {
     let response = ApiResponse::success(
-        json!({"key": "tpl_123", "name": "invoice"}),
+        json!({"key": "tpl_123", "name": "receipt"}),
         "Template retrieved successfully",
     )
     .into_response();
@@ -24,7 +24,7 @@ async fn test_success_response_format() {
 
     assert_eq!(json["success"], true);
     assert_eq!(json["data"]["key"], "tpl_123");
-    assert_eq!(json["data"]["name"], "invoice");
+    assert_eq!(json["data"]["name"], "receipt");
     assert_eq!(json["message"], "Template retrieved successfully");
     assert!(
         json.get("processingTimeMs").is_none(),

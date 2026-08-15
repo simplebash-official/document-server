@@ -169,13 +169,13 @@ mod tests {
 
     use super::*;
 
-    /// No database involved — exercises the real `templates/invoice.typ` +
+    /// No database involved — exercises the real `templates/receipt.typ` +
     /// `fonts/` against the real Typst compiler, confirming `sys.inputs`
     /// threading and PDF export both actually work end to end.
     #[test]
-    fn warm_up_and_compile_invoice_produces_a_pdf() {
+    fn warm_up_and_compile_receipt_produces_a_pdf() {
         let engine = RenderEngine::warm_up("templates", "fonts").expect("warm_up should succeed");
-        assert!(engine.known_templates().contains(&"invoice".to_string()));
+        assert!(engine.known_templates().contains(&"receipt".to_string()));
 
         let mut items = Vec::new();
         let mut item = Dict::new();
@@ -193,15 +193,15 @@ mod tests {
         );
         input.insert(Str::from("total"), Value::Float(19.98));
 
-        let warned = engine.compile("invoice", input);
-        let doc = warned.output.expect("invoice.typ should compile");
+        let warned = engine.compile("receipt", input);
+        let doc = warned.output.expect("receipt.typ should compile");
 
         let pdf_bytes =
             typst_pdf::pdf(&doc, &Default::default()).expect("pdf export should succeed");
         assert!(pdf_bytes.starts_with(b"%PDF-"));
     }
 
-    /// Same shape as the invoice test above, but for `templates/sticker.typ`
+    /// Same shape as the receipt test above, but for `templates/sticker.typ`
     /// — confirms the vendored `tiaoma`/`zebra` barcode/QR packages
     /// (`templates/lib/`) actually resolve and compile through the
     /// file-system resolver, including their WASM plugins.
