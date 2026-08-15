@@ -49,11 +49,7 @@ Per-request orchestration (JSON → `Dict`, compile, export, error translation) 
 
 Templates stay file-based on disk (`templates/*.typ`); the `templates` table is queryable *metadata about* each file (name, description, `data_schema`, `is_active`), never a second source of truth for rendering — the `.typ` file's own header comment documents its JSON contract. `documents` rows store the request's `data`, not the rendered PDF bytes — a reprint always reflects the *current* template (a fixed typo benefits every historical document), and this avoids needing blob storage for a first version.
 
-### Barcode/QR (`templates/lib/`)
-
-`templates/sticker.typ` (the Phase 2 second template — a 50mm×30mm print label) draws a Code128 barcode via the vendored `tiaoma` package and a QR code via the vendored `zebra` package, both under `templates/lib/`. Both are **vendored copies**, not `@preview` imports resolved over the network — `RenderEngine` deliberately has no package resolver, only `with_file_system_resolver`, so a template can only ever `#import` something that's actually checked into this repo. This is the same determinism argument as bundling fonts explicitly (see spec §6.1): render output must not depend on package-registry availability or on which version happened to be cached on whichever machine runs the server. See `templates/lib/README.md` for exact provenance/upgrade instructions. Both packages happen to use a WASM plugin (`plugin("...wasm")`) for their encoding math — that resolves through the same file-system resolver as any other asset, no special engine support was needed.
-
-`RenderEngine::warm_up`'s `.typ` scan only looks at the top level of `TEMPLATES_DIR`, so `templates/lib/**` is never mistaken for a render-able template — `clients::render::tests::warm_up_and_compile_sticker_produces_a_pdf` asserts exactly that (`"lib"` never appears in `known_templates()`).
+See `templates/CLAUDE.md` for barcode/QR (`templates/lib/`) conventions.
 
 ### Response & error envelope — the one deliberate deviation
 
@@ -89,9 +85,7 @@ No joins are used, and none are expected to be needed: a `documents` row's `temp
 
 Same `utoipa`/`utoipa-axum`/`utoipa-swagger-ui` setup as jana2u-pos — Swagger at `/docs`, raw spec at `/api-docs/openapi.json`. Every handler must be registered via `routes!(...)` inside a module's `router()` — never plain `axum::routing::get/post` — since only `routes!()`-registered handlers get collected into the spec. **Exception to watch for**: `POST /api/render/{templateKey}`'s `#[utoipa::path]` declares its 200 response as `content_type = "application/pdf", body = Vec<u8>` instead of the usual `ApiResponse<T>` schema — this is deliberate (see above), do not "fix" it to look like every other handler.
 
-### Postman collection (`postman/`)
-
-`pdf-server.postman_collection.json` (one folder per module, mirroring the spec's Phase 1/2/3 route-surface notes above) plus `development.postman_environment.json`/`production.postman_environment.json` (each holding `baseUrl` and a sample `templateKey`). Hand-maintained — update it in the same change as any route addition, same convention as `../backend/postman/`. Unlike that collection, there's no `accessToken`/Bearer auth variable here — nothing in this service needs one.
+See `postman/CLAUDE.md` for the Postman collection conventions.
 
 ## Testing
 
