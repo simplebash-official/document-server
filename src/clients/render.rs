@@ -49,8 +49,10 @@ impl RenderEngine {
     /// runs one best-effort trial compile per known template purely to
     /// catch outright breakage (bad syntax, a missing asset, a bad font
     /// family) before the first real request. A trial compile failing
-    /// because the template legitimately requires real input fields is
-    /// expected — logged at `warn`, not treated as broken; the one true
+    /// because the template legitimately requires real input fields is the
+    /// common case (any template that actually takes input fails this
+    /// empty-`Dict` probe every time) — logged at `debug`, not `warn`, so it
+    /// doesn't read as a startup problem on every single run; the one true
     /// validation of "does this render successfully with realistic data" is
     /// `tests/render_test.rs`, not this pass.
     pub fn warm_up(
@@ -73,7 +75,13 @@ impl RenderEngine {
             let warned: typst::diag::Warned<Result<PagedDocument, typst_as_lib::TypstAsLibError>> =
                 engine.compile_with_input(file_name.as_str(), Dict::new());
             if let Err(err) = warned.output {
-                tracing::warn!(
+                // `debug`, not `warn`: a template that reads any field off
+                // its input will *always* fail this empty-`Dict` probe —
+                // that's the normal, expected case for every real template,
+                // not a signal worth surfacing under the default `info`
+                // filter. It's still one `RUST_LOG=pdf_server=debug` away
+                // when actually diagnosing a template that won't compile.
+                tracing::debug!(
                     template = %name,
                     error = %err,
                     "template failed its startup trial compile (expected if it just needs real input data)"
@@ -187,6 +195,30 @@ mod tests {
 
         let warned = engine.compile("invoice", input);
         let doc = warned.output.expect("invoice.typ should compile");
+
+        let pdf_bytes =
+            typst_pdf::pdf(&doc, &Default::default()).expect("pdf export should succeed");
+        assert!(pdf_bytes.starts_with(b"%PDF-"));
+    }
+
+    /// Same shape as the invoice test above, but for `templates/sticker.typ`
+    /// — confirms the vendored `tiaoma`/`zebra` barcode/QR packages
+    /// (`templates/lib/`) actually resolve and compile through the
+    /// file-system resolver, including their WASM plugins.
+    #[test]
+    fn warm_up_and_compile_sticker_produces_a_pdf() {
+        let engine = RenderEngine::warm_up("templates", "fonts").expect("warm_up should succeed");
+        assert!(engine.known_templates().contains(&"sticker".to_string()));
+        // The vendored library files must never be mistaken for top-level
+        // templates themselves.
+        assert!(!engine.known_templates().contains(&"lib".to_string()));
+
+        let mut input = Dict::new();
+        input.insert(Str::from("title"), "USB-C Cable".into_value());
+        input.insert(Str::from("reference"), "SKU-00042".into_value());
+
+        let warned = engine.compile("sticker", input);
+        let doc = warned.output.expect("sticker.typ should compile");
 
         let pdf_bytes =
             typst_pdf::pdf(&doc, &Default::default()).expect("pdf export should succeed");
