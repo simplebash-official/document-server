@@ -1,6 +1,6 @@
 // Full-stack: real SQLite (a throwaway per-test file via
 // `common::spawn_app`), real render engine. Exercises the whole render
-// pipeline end to end against the seed `templates/invoice.typ` and
+// pipeline end to end against the seed `templates/receipt.typ` and
 // `templates/sticker.typ` templates.
 
 mod common;
@@ -10,7 +10,7 @@ use axum::http::{Request, StatusCode};
 use serde_json::json;
 use tower::ServiceExt;
 
-fn sample_invoice_data() -> serde_json::Value {
+fn sample_receipt_data() -> serde_json::Value {
     json!({
         "invoiceNumber": "INV-0001",
         "customerName": "Jane Doe",
@@ -23,16 +23,16 @@ fn sample_invoice_data() -> serde_json::Value {
 }
 
 #[tokio::test]
-async fn render_invoice_returns_pdf_and_records_document() {
+async fn render_receipt_returns_pdf_and_records_document() {
     let app = common::spawn_app().await;
 
     let template_key: String = sqlx::query_scalar("SELECT key FROM templates WHERE name = ?")
-        .bind("invoice")
+        .bind("receipt")
         .fetch_one(&app.db)
         .await
-        .expect("invoice template should be synced from disk by spawn_app");
+        .expect("receipt template should be synced from disk by spawn_app");
 
-    let body = sample_invoice_data();
+    let body = sample_receipt_data();
     let response = app
         .router
         .clone()
@@ -147,7 +147,7 @@ async fn render_unknown_template_returns_404() {
                 .method("POST")
                 .uri("/api/render/tpl_does_not_exist")
                 .header("content-type", "application/json")
-                .body(Body::from(sample_invoice_data().to_string()))
+                .body(Body::from(sample_receipt_data().to_string()))
                 .unwrap(),
         )
         .await
@@ -164,16 +164,16 @@ async fn render_unknown_template_returns_404() {
 }
 
 #[tokio::test]
-async fn render_invoice_with_missing_field_returns_422() {
+async fn render_receipt_with_missing_field_returns_422() {
     let app = common::spawn_app().await;
 
     let template_key: String = sqlx::query_scalar("SELECT key FROM templates WHERE name = ?")
-        .bind("invoice")
+        .bind("receipt")
         .fetch_one(&app.db)
         .await
-        .expect("invoice template should be synced from disk by spawn_app");
+        .expect("receipt template should be synced from disk by spawn_app");
 
-    // Missing every field `invoice.typ` reads off `data` — fails at
+    // Missing every field `receipt.typ` reads off `data` — fails at
     // `data.invoiceNumber` access during compilation.
     let response = app
         .router

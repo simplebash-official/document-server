@@ -38,7 +38,7 @@ async fn list_templates_returns_every_seeded_template() {
         .map(|t| t["name"].as_str().unwrap())
         .collect();
     // Sorted by name — the seed `templates/` directory has exactly these two.
-    assert_eq!(names, vec!["invoice", "sticker"]);
+    assert_eq!(names, vec!["receipt", "sticker"]);
     assert!(templates.iter().all(|t| t["isActive"] == true));
     assert!(
         templates

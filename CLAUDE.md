@@ -11,7 +11,7 @@ This codebase follows jana2u-pos's backend conventions (`core/error.rs`, `core/r
 ## Commands
 
 - `cargo build` / `cargo run` (equivalent to `cargo run --bin pdf_server`)
-- `cargo test` — every test needs no external service: `tests/render_test.rs` opens its own throwaway SQLite file per test (see `tests/common::spawn_app()`), and `clients::render::tests::warm_up_and_compile_invoice_produces_a_pdf` (a `#[cfg(test)]` unit test in `src/clients/render.rs`) needs no database at all — it exercises the real Typst compiler against the real `templates/`/`fonts/` directories.
+- `cargo test` — every test needs no external service: `tests/render_test.rs` opens its own throwaway SQLite file per test (see `tests/common::spawn_app()`), and `clients::render::tests::warm_up_and_compile_receipt_produces_a_pdf` (a `#[cfg(test)]` unit test in `src/clients/render.rs`) needs no database at all — it exercises the real Typst compiler against the real `templates/`/`fonts/` directories.
 - `cargo fmt` / `cargo fmt --check`
 - `make check` — `cargo fmt --check` → `cargo clippy --all-targets --all-features -- -D warnings` → `cargo test`, stopping at the first failure. Run this after every change.
 
@@ -97,11 +97,11 @@ Same `utoipa`/`utoipa-axum`/`utoipa-swagger-ui` setup as jana2u-pos — Swagger 
 
 Four tiers, no external service needed for any of them (a deliberate improvement over jana2u-pos's Mongo-backed test suite — no database process to start before running `cargo test`):
 
-- `tests/render_test.rs` — full-stack, against a real throwaway SQLite file per test (`tests/common::spawn_app()`, which also does a real `RenderEngine::warm_up()` and disk-sync). Exercises the whole pipeline against both seed templates: `invoice` (successful render → PDF magic bytes + matching `documents` row, unknown template → 404, missing required field → 422) and `sticker` (successful render, including the vendored barcode/QR packages, end to end through HTTP).
+- `tests/render_test.rs` — full-stack, against a real throwaway SQLite file per test (`tests/common::spawn_app()`, which also does a real `RenderEngine::warm_up()` and disk-sync). Exercises the whole pipeline against both seed templates: `receipt` (successful render → PDF magic bytes + matching `documents` row, unknown template → 404, missing required field → 422) and `sticker` (successful render, including the vendored barcode/QR packages, end to end through HTTP).
 - `tests/templates_test.rs` — same full-stack style, scoped to `templates` as a resource: `GET /api/templates` lists both seed templates, `GET /api/templates/{key}` fetches one, unknown key → 404.
 - `tests/openapi_test.rs` — real router, real (throwaway-file) SQLite pool, real `RenderEngine::warm_up()`. Asserts every module path is listed and that the render endpoint is documented as `application/pdf`.
 - `tests/response_format_test.rs` — no router, no database. Calls `ApiResponse`/`AppError` directly.
-- `src/clients/render.rs`'s `#[cfg(test)]` unit tests — no database, no router; compile the real `invoice.typ`/`sticker.typ` with real sample data and assert real PDF bytes come out (the `sticker` one is also the fastest way to check a `tiaoma`/`zebra` upgrade still compiles). The fastest way to check a Typst/typst-as-lib API change still works.
+- `src/clients/render.rs`'s `#[cfg(test)]` unit tests — no database, no router; compile the real `receipt.typ`/`sticker.typ` with real sample data and assert real PDF bytes come out (the `sticker` one is also the fastest way to check a `tiaoma`/`zebra` upgrade still compiles). The fastest way to check a Typst/typst-as-lib API change still works.
 
 `tests/documents_test.rs` doesn't exist yet — `documents`'s real routes are Phase 3 work; `render_test.rs` already exercises the `documents` write path indirectly.
 
@@ -115,7 +115,7 @@ Same rules as jana2u-pos, applied whenever a file is touched:
 
 ## Build Phases
 
-- **Phase 1 — Core service** (done): health, `render` end-to-end for one template (`invoice`), `templates`/`documents` internal plumbing + module-status stubs, OpenAPI, `AppError`/`ApiResponse` envelope, the Phase 1 test suite.
+- **Phase 1 — Core service** (done): health, `render` end-to-end for one template (`receipt`), `templates`/`documents` internal plumbing + module-status stubs, OpenAPI, `AppError`/`ApiResponse` envelope, the Phase 1 test suite.
 - **Phase 2 — Second template + barcode/QR** (done): `templates/sticker.typ` (print-size, 50mm×30mm) using the vendored `tiaoma`/`zebra` packages for a Code128 barcode and a QR code (`templates/lib/`); `templates`'s real read routes (`GET /`, `GET /{key}`); `tests/templates_test.rs` and the sticker cases in `render_test.rs`/`clients::render`'s unit tests.
 - **Phase 3 — not started**: `documents`'s real read routes, `GET /api/documents/{key}/pdf` reprint endpoint.
 - **Phase 4 — not started**: format negotiation (PNG/SVG), template hot-reload without a restart, render result caching keyed on `(template_key, data)`.

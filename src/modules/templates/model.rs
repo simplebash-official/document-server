@@ -14,8 +14,8 @@ use crate::domain::templates::Template;
 #[derive(Debug, Clone, FromRow)]
 pub struct TemplateRow {
     pub key: String,
-    /// Matches the `.typ` filename stem on disk (e.g. `"invoice"` for
-    /// `templates/invoice.typ`) — how `templates::service` resolves which
+    /// Matches the `.typ` filename stem on disk (e.g. `"receipt"` for
+    /// `templates/receipt.typ`) — how `templates::service` resolves which
     /// source file to compile.
     pub name: String,
     pub description: String,
