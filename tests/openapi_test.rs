@@ -67,6 +67,7 @@ async fn openapi_json_lists_all_module_paths() {
         "/api/render",
         "/api/render/{templateKey}",
         "/api/templates",
+        "/api/templates/{key}",
         "/api/documents",
     ] {
         assert!(paths.contains_key(expected), "missing path: {expected}");

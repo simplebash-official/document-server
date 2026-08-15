@@ -22,20 +22,6 @@ pub(crate) async fn find_template_by_key(
     )
 }
 
-#[allow(dead_code)] // scaffolded for Phase 2's real `GET /api/templates` read routes.
-pub(crate) async fn find_template_by_name(
-    db: &SqlitePool,
-    name: &str,
-) -> AppResult<Option<TemplateRow>> {
-    Ok(
-        sqlx::query_as::<_, TemplateRow>("SELECT * FROM templates WHERE name = ?")
-            .bind(name)
-            .fetch_optional(db)
-            .await?,
-    )
-}
-
-#[allow(dead_code)] // scaffolded for Phase 2's real `GET /api/templates` read routes.
 pub(crate) async fn list_templates(db: &SqlitePool) -> AppResult<Vec<TemplateRow>> {
     Ok(
         sqlx::query_as::<_, TemplateRow>("SELECT * FROM templates ORDER BY name ASC")

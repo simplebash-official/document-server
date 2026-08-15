@@ -10,9 +10,34 @@ use crate::{
         constants::codes,
         error::{AppError, AppResult},
     },
-    domain::templates::Template,
+    domain::templates::{Template, TemplatesResponse},
     modules::templates::repository,
 };
+
+/// Every known template, in `name` order — backs `GET /api/templates`.
+/// Returns inactive templates too (an admin/human browsing metadata should
+/// see the full picture); `render`'s `get_active_template_by_key` is the
+/// one place that filters on `is_active`.
+pub(crate) async fn list_templates(db: &SqlitePool) -> AppResult<TemplatesResponse> {
+    let rows = repository::list_templates(db).await?;
+    Ok(TemplatesResponse {
+        templates: rows.into_iter().map(|row| row.into_template()).collect(),
+    })
+}
+
+/// Fetch by `key` for `GET /api/templates/{key}` — 404s with
+/// `TEMPLATE_NOT_FOUND` if missing, but (unlike `get_active_template_by_key`
+/// below) does not filter on `is_active`: a caller inspecting a template's
+/// metadata/data-contract should be able to look up an inactive one too.
+pub(crate) async fn get_template_by_key(db: &SqlitePool, key: &str) -> AppResult<Template> {
+    let row = repository::find_template_by_key(db, key)
+        .await?
+        .ok_or_else(|| {
+            AppError::not_found_with_code("Template not found", codes::TEMPLATE_NOT_FOUND)
+        })?;
+
+    Ok(row.into_template())
+}
 
 /// Fetch by `key`, 404ing with `TEMPLATE_NOT_FOUND` if missing *or*
 /// inactive — an inactive template is treated the same as a nonexistent one

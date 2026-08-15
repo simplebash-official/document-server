@@ -34,8 +34,8 @@ Unlike jana2u-pos's backend (where auth is opt-in per handler via `CurrentUser`/
 Three modules, each layered `routes.rs` → `service` → `repository` (repository = SQLite/Typst only, no `AppError`, just `Option`/`Vec`/`Result` straight from the driver/compiler — the "not found"/"compile failed" → `AppError` translation happens one layer up, in `service`):
 
 - **`render`** — the render endpoint itself (`POST /api/render/{templateKey}`). `repository/typst.rs` owns the JSON→Typst `Dict` bridge (`json_to_dict`, hand-written — `typst-as-lib` has no built-in `serde_json` integration) and the compile/export orchestration; `service` resolves the template, compiles, and records a `documents` entry. `repository`/`service` are both private — `routes` is the only public entry point.
-- **`templates`** — template metadata. **Phase 1 status**: `service`/`repository` are fully real (used by `render` and by `main.rs`'s startup sync), but `routes` exposes only the module-status stub (`GET /`) — the real read routes (`GET /`, `GET /{key}`) are Phase 2 work. A route missing from the OpenAPI spec today is expected, not a bug.
-- **`documents`** — records of rendered documents. **Phase 1 status**: same as `templates` — `service`/`repository` are real (written to by every successful render), but real read routes (`GET /`, `GET /{key}`, plus a future `GET /{key}/pdf` reprint endpoint) are Phase 3 work.
+- **`templates`** — template metadata. **Real as of Phase 2**: `GET /` lists every template (active and inactive), `GET /{key}` fetches one. Unlike `render`/`documents`, there's no module-status stub — the collection root is itself the real "list" endpoint, so there's no unused path left for one (same convention jana2u-pos's `suppliers` module uses).
+- **`documents`** — records of rendered documents. **Phase 1 status, still current**: `service`/`repository` are real (written to by every successful render), but real read routes (`GET /`, `GET /{key}`, plus a future `GET /{key}/pdf` reprint endpoint) are Phase 3 work — `routes` still exposes only the module-status stub.
 
 **Cross-module access**: `render::service::render_template` calls `templates::service::get_active_template_by_key` and `documents::service::record_document` — both reached through the sibling module's `service`, never its `repository` (same rule as jana2u-pos). `templates::service` is `pub` (not `pub(crate)`) specifically because `main.rs`'s startup sync needs `sync_templates_from_disk` directly, and a `pub(crate)` item in this library crate is invisible to `main.rs` (a separate binary crate). `documents::service` stays `pub(crate)` — only the sibling `render` module calls in.
 
@@ -43,11 +43,17 @@ Three modules, each layered `routes.rs` → `service` → `repository` (reposito
 
 ### The render pipeline & `RenderEngine`
 
-`clients::render::RenderEngine` (parallel to `clients::sqlite` — a resource connected/built once at startup and shared read-only via `AppState`) owns the Typst engine's *lifecycle*: `warm_up()` reads every font under `FONTS_DIR` into memory (a genuine preload — `.fonts()` takes owned bytes) and points the engine at `TEMPLATES_DIR` via `with_file_system_resolver` (which resolves `.typ` files lazily from disk by relative path — Typst's own internal caching, not a hand-rolled one, is what avoids repeat disk I/O per request). It then runs one best-effort trial compile per known template (empty input) purely to catch outright breakage (bad syntax, a missing asset, a bad font family) before the first real request — a trial failing because the template legitimately needs real input data is expected and only logged at `warn`.
+`clients::render::RenderEngine` (parallel to `clients::sqlite` — a resource connected/built once at startup and shared read-only via `AppState`) owns the Typst engine's *lifecycle*: `warm_up()` reads every font under `FONTS_DIR` into memory (a genuine preload — `.fonts()` takes owned bytes) and points the engine at `TEMPLATES_DIR` via `with_file_system_resolver` (which resolves `.typ` files lazily from disk by relative path — Typst's own internal caching, not a hand-rolled one, is what avoids repeat disk I/O per request). It then runs one best-effort trial compile per known template (empty input) purely to catch outright breakage (bad syntax, a missing asset, a bad font family) before the first real request — a trial failing because the template legitimately needs real input data is the common case (true for *every* template that actually takes input) and is logged at `debug`, not `warn`, so it doesn't look like a startup problem on every run.
 
 Per-request orchestration (JSON → `Dict`, compile, export, error translation) is **not** in `clients::render` — it lives in `modules::render::repository::typst`, since that's request-scoped business logic, not resource lifecycle. `TypstEngineError::Compile` → `AppError::unprocessable_entity(codes::RENDER_VALIDATION_FAILED, ..)` (422); `TypstEngineError::Export` → `AppError::internal_with_code(.., codes::PDF_EXPORT_FAILED)` (500).
 
 Templates stay file-based on disk (`templates/*.typ`); the `templates` table is queryable *metadata about* each file (name, description, `data_schema`, `is_active`), never a second source of truth for rendering — the `.typ` file's own header comment documents its JSON contract. `documents` rows store the request's `data`, not the rendered PDF bytes — a reprint always reflects the *current* template (a fixed typo benefits every historical document), and this avoids needing blob storage for a first version.
+
+### Barcode/QR (`templates/lib/`)
+
+`templates/sticker.typ` (the Phase 2 second template — a 50mm×30mm print label) draws a Code128 barcode via the vendored `tiaoma` package and a QR code via the vendored `zebra` package, both under `templates/lib/`. Both are **vendored copies**, not `@preview` imports resolved over the network — `RenderEngine` deliberately has no package resolver, only `with_file_system_resolver`, so a template can only ever `#import` something that's actually checked into this repo. This is the same determinism argument as bundling fonts explicitly (see spec §6.1): render output must not depend on package-registry availability or on which version happened to be cached on whichever machine runs the server. See `templates/lib/README.md` for exact provenance/upgrade instructions. Both packages happen to use a WASM plugin (`plugin("...wasm")`) for their encoding math — that resolves through the same file-system resolver as any other asset, no special engine support was needed.
+
+`RenderEngine::warm_up`'s `.typ` scan only looks at the top level of `TEMPLATES_DIR`, so `templates/lib/**` is never mistaken for a render-able template — `clients::render::tests::warm_up_and_compile_sticker_produces_a_pdf` asserts exactly that (`"lib"` never appears in `known_templates()`).
 
 ### Response & error envelope — the one deliberate deviation
 
@@ -91,12 +97,13 @@ Same `utoipa`/`utoipa-axum`/`utoipa-swagger-ui` setup as jana2u-pos — Swagger 
 
 Four tiers, no external service needed for any of them (a deliberate improvement over jana2u-pos's Mongo-backed test suite — no database process to start before running `cargo test`):
 
-- `tests/render_test.rs` — full-stack, against a real throwaway SQLite file per test (`tests/common::spawn_app()`, which also does a real `RenderEngine::warm_up()` and disk-sync). Exercises the whole pipeline against the seed `templates/invoice.typ`: successful render → PDF magic bytes + matching `documents` row, unknown template → 404, missing required field → 422.
+- `tests/render_test.rs` — full-stack, against a real throwaway SQLite file per test (`tests/common::spawn_app()`, which also does a real `RenderEngine::warm_up()` and disk-sync). Exercises the whole pipeline against both seed templates: `invoice` (successful render → PDF magic bytes + matching `documents` row, unknown template → 404, missing required field → 422) and `sticker` (successful render, including the vendored barcode/QR packages, end to end through HTTP).
+- `tests/templates_test.rs` — same full-stack style, scoped to `templates` as a resource: `GET /api/templates` lists both seed templates, `GET /api/templates/{key}` fetches one, unknown key → 404.
 - `tests/openapi_test.rs` — real router, real (throwaway-file) SQLite pool, real `RenderEngine::warm_up()`. Asserts every module path is listed and that the render endpoint is documented as `application/pdf`.
 - `tests/response_format_test.rs` — no router, no database. Calls `ApiResponse`/`AppError` directly.
-- `src/clients/render.rs`'s `#[cfg(test)]` unit test — no database, no router; compiles the real `invoice.typ` with real sample data and asserts real PDF bytes come out. The fastest way to check a Typst/typst-as-lib API change still works.
+- `src/clients/render.rs`'s `#[cfg(test)]` unit tests — no database, no router; compile the real `invoice.typ`/`sticker.typ` with real sample data and assert real PDF bytes come out (the `sticker` one is also the fastest way to check a `tiaoma`/`zebra` upgrade still compiles). The fastest way to check a Typst/typst-as-lib API change still works.
 
-`tests/templates_test.rs`/`tests/documents_test.rs` don't exist yet — they're not Phase 1 deliverables (their real routes are Phase 2/3 work); `render_test.rs` already exercises the `documents` write path indirectly.
+`tests/documents_test.rs` doesn't exist yet — `documents`'s real routes are Phase 3 work; `render_test.rs` already exercises the `documents` write path indirectly.
 
 ## Code Comments
 
@@ -108,7 +115,7 @@ Same rules as jana2u-pos, applied whenever a file is touched:
 
 ## Build Phases
 
-- **Phase 1 — Core service** (done): health, `render` end-to-end for one template (`invoice`), `templates`/`documents` internal plumbing + module-status stubs, OpenAPI, `AppError`/`ApiResponse` envelope, the four-tier Phase 1 test suite above.
-- **Phase 2 — not started**: second template(s) + barcode/QR, `templates`'s real read routes (`GET /`, `GET /{key}`).
-- **Phase 3 — not started**: `documents`'s real read routes, `GET /api/documents/{key}/pdf` reprint endpoint, Postman collection.
+- **Phase 1 — Core service** (done): health, `render` end-to-end for one template (`invoice`), `templates`/`documents` internal plumbing + module-status stubs, OpenAPI, `AppError`/`ApiResponse` envelope, the Phase 1 test suite.
+- **Phase 2 — Second template + barcode/QR** (done): `templates/sticker.typ` (print-size, 50mm×30mm) using the vendored `tiaoma`/`zebra` packages for a Code128 barcode and a QR code (`templates/lib/`); `templates`'s real read routes (`GET /`, `GET /{key}`); `tests/templates_test.rs` and the sticker cases in `render_test.rs`/`clients::render`'s unit tests.
+- **Phase 3 — not started**: `documents`'s real read routes, `GET /api/documents/{key}/pdf` reprint endpoint.
 - **Phase 4 — not started**: format negotiation (PNG/SVG), template hot-reload without a restart, render result caching keyed on `(template_key, data)`.

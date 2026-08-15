@@ -25,3 +25,10 @@ pub struct Template {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
+
+/// Response body for `GET /api/templates`.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct TemplatesResponse {
+    pub templates: Vec<Template>,
+}
