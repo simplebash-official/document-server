@@ -35,7 +35,6 @@ pub(crate) async fn insert_document(
     .await?)
 }
 
-#[allow(dead_code)] // scaffolded for Phase 3's real `GET /api/documents/{key}` read route.
 pub(crate) async fn find_document_by_key(
     db: &SqlitePool,
     key: &str,
@@ -44,6 +43,17 @@ pub(crate) async fn find_document_by_key(
         sqlx::query_as::<_, DocumentRow>("SELECT * FROM documents WHERE key = ?")
             .bind(key)
             .fetch_optional(db)
+            .await?,
+    )
+}
+
+/// Newest first — a document list reads naturally as recent activity, not
+/// an alphabetized catalog (contrast `templates::repository::list_templates`,
+/// which sorts by `name` since templates are a small, named set).
+pub(crate) async fn list_documents(db: &SqlitePool) -> AppResult<Vec<DocumentRow>> {
+    Ok(
+        sqlx::query_as::<_, DocumentRow>("SELECT * FROM documents ORDER BY created_at DESC")
+            .fetch_all(db)
             .await?,
     )
 }

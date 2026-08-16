@@ -163,18 +163,23 @@ async fn render_unknown_template_returns_404() {
     assert_eq!(json["code"], "TEMPLATE_NOT_FOUND");
 }
 
+/// `receipt.typ` (the current seed template — a static, fully hand-designed
+/// Pubbles Pet Parlor mockup) never reads `sys.inputs` at all, so it can't
+/// 422 on a missing field; `sticker.typ` is the seed template that actually
+/// validates its input (`data.title`/`data.reference` access), so it's the
+/// one this regression guard targets.
 #[tokio::test]
-async fn render_receipt_with_missing_field_returns_422() {
+async fn render_sticker_with_missing_field_returns_422() {
     let app = common::spawn_app().await;
 
     let template_key: String = sqlx::query_scalar("SELECT key FROM templates WHERE name = ?")
-        .bind("receipt")
+        .bind("sticker")
         .fetch_one(&app.db)
         .await
-        .expect("receipt template should be synced from disk by spawn_app");
+        .expect("sticker template should be synced from disk by spawn_app");
 
-    // Missing every field `receipt.typ` reads off `data` — fails at
-    // `data.invoiceNumber` access during compilation.
+    // Missing every field `sticker.typ` reads off `data` — fails at
+    // `data.title` access during compilation.
     let response = app
         .router
         .oneshot(

@@ -43,9 +43,14 @@ impl RenderEngine {
     /// Builds the engine once: reads every font under `fonts_dir` into
     /// memory (`.fonts()` takes owned bytes — a genuine preload), points
     /// the engine at `templates_dir` via `with_file_system_resolver` (which
-    /// resolves `.typ` files, and any assets they reference, lazily from
-    /// disk by relative path — Typst's own internal caching, not a
-    /// hand-rolled one, is what avoids repeat disk I/O per request), then
+    /// resolves `.typ` files, and any assets they reference, from disk by
+    /// relative path — `typst-as-lib` wraps this resolver in its own
+    /// `.into_cached()`, so each file is actually only ever read from disk
+    /// once per process lifetime, not once per request; a template edited
+    /// on disk while the server keeps running is *not* picked up until a
+    /// restart rebuilds this engine — see `documents::service::reprint_document`'s
+    /// doc comment for where that boundary actually matters, and CLAUDE.md's
+    /// Phase 4 for the unimplemented "hot-reload without a restart"), then
     /// runs one best-effort trial compile per known template purely to
     /// catch outright breakage (bad syntax, a missing asset, a bad font
     /// family) before the first real request. A trial compile failing

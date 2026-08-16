@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "0883660c-a4fe-456e-9da8-aa21dd56016c",
     "name": "pdf-server",
-    "description": "Standalone Rust/Axum service that renders PDFs from Typst templates. **No authentication** — every route here is open, so there is no Bearer/API-key setup needed.\n\nBase URL (and sample template keys) are environment variables — switch the active Postman environment (Development/Production) to point requests at the right instance.\n\n**Phase 2 status**: `Render` and `Templates` are fully real. `Documents` still only exposes a `GET /` module-status stub — its real read routes (`GET /`, `GET /{key}`, plus a reprint `GET /{key}/pdf`) are Phase 3 work, not built yet.\n\n**Getting real template keys**: the seed `receipt`/`sticker` templates are created automatically the first time the server starts (see `templates/receipt.typ`/`templates/sticker.typ`). Easiest path: run `Templates > List Templates` and copy the `key` values from the response into the environment's `templateKey`/`stickerKey` variables. (Or read them directly from SQLite: `sqlite3 pdf_server.db \"SELECT key, name FROM templates;\"`.)",
+    "description": "Standalone Rust/Axum service that renders PDFs from Typst templates. **No authentication** — every route here is open, so there is no Bearer/API-key setup needed.\n\nBase URL (and sample keys) are environment variables — switch the active Postman environment (Development/Production) to point requests at the right instance.\n\n**Phase 3 status**: `Render`, `Templates`, and `Documents` are all fully real now — every module has dropped its module-status stub in favor of a real collection-root endpoint.\n\n**Getting real template keys**: the seed `receipt`/`sticker` templates are created automatically the first time the server starts (see `templates/receipt.typ`/`templates/sticker.typ`). Easiest path: run `Templates > List Templates` and copy the `key` values from the response into the environment's `templateKey`/`stickerKey` variables. (Or read them directly from SQLite: `sqlite3 pdf_server.db \"SELECT key, name FROM templates;\"`.)\n\n**Getting a real document key**: run `Render > Render Receipt` or `Render > Render Sticker` once, then `Documents > List Documents` and copy a `key` into the environment's `documentKey` variable — or read `sqlite3 pdf_server.db \"SELECT key FROM documents;\"` directly.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -137,7 +137,7 @@
       "name": "Documents",
       "item": [
         {
-          "name": "Documents Module Status",
+          "name": "List Documents",
           "request": {
             "method": "GET",
             "header": [],
@@ -146,7 +146,35 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "documents"]
             },
-            "description": "Phase 1 status stub only — the real `GET /` (list rendered documents), `GET /{key}` (get one record), and `GET /{key}/pdf` (reprint) read routes are Phase 3 work, not built yet. Every successful render already writes a row here — see the `documents` table in SQLite."
+            "description": "Lists every recorded document (one row per successful render, written by `Render Receipt`/`Render Sticker`), newest first. Use this to find a real `key` for `{{documentKey}}`."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Document",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/documents/{{documentKey}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "documents", "{{documentKey}}"]
+            },
+            "description": "Fetch one document's record by `key` — the template it was rendered from (`templateKey`), the exact JSON `data` it was rendered with, and `fileSizeBytes`. Does **not** return the PDF itself (no PDF bytes are stored — see Reprint Document for that). 404 `DOCUMENT_NOT_FOUND` if the key doesn't exist."
+          },
+          "response": []
+        },
+        {
+          "name": "Reprint Document",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/documents/{{documentKey}}/pdf",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "documents", "{{documentKey}}", "pdf"]
+            },
+            "description": "Re-renders this document's stored `data` against the template and returns raw PDF bytes — `Content-Type: application/pdf`, same binary-response deviation as Render Receipt/Render Sticker. Not a cached copy of the original PDF (none is stored): this recompiles, so a template fix made *and the server restarted* since the original render shows up here too — see CLAUDE.md's \"Documents as first-class resources\" section for the exact boundary (recompiles against the template as of the server's last startup, not literally live disk edits).\n\n404 `DOCUMENT_NOT_FOUND` if the key doesn't exist; 422/500 in the same shape as rendering, if the stored data somehow no longer satisfies the (possibly since-changed) template."
           },
           "response": []
         }
