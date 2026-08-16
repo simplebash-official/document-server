@@ -17,6 +17,8 @@ use utoipa::OpenApi;
         (name = "render", description = "Template rendering"),
         (name = "templates", description = "Template metadata"),
         (name = "documents", description = "Rendered document records"),
+        (name = "barcodes", description = "1D Barcode generation"),
+        (name = "qrcodes", description = "2D QR Code generation"),
     )
 )]
 pub struct ApiDoc;

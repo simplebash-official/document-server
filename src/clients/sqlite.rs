@@ -35,6 +35,7 @@ async fn create_schema(pool: &SqlitePool) -> Result<(), sqlx::Error> {
         "CREATE TABLE IF NOT EXISTS templates (
             key TEXT PRIMARY KEY,
             name TEXT NOT NULL UNIQUE,
+            type TEXT NOT NULL DEFAULT 'document',
             description TEXT NOT NULL DEFAULT '',
             data_schema TEXT,
             is_active INTEGER NOT NULL,
@@ -44,6 +45,11 @@ async fn create_schema(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     )
     .execute(pool)
     .await?;
+
+    // In case an existing database created before the `type` column was added is being reused
+    let _ = sqlx::query("ALTER TABLE templates ADD COLUMN type TEXT NOT NULL DEFAULT 'document'")
+        .execute(pool)
+        .await;
 
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS documents (

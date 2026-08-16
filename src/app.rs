@@ -85,6 +85,14 @@ pub fn build_router(state: AppState) -> Router {
         .nest(
             &format!("/{}", mod_names::DOCUMENTS),
             modules::documents::routes::router(),
+        )
+        .nest(
+            &format!("/{}", mod_names::BARCODES),
+            modules::barcodes::routes::router(),
+        )
+        .nest(
+            &format!("/{}", mod_names::QRCODES),
+            modules::qrcodes::routes::router(),
         );
 
     let (router, openapi) = OpenApiRouter::<AppState>::with_openapi(ApiDoc::openapi())

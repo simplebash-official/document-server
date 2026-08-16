@@ -33,6 +33,8 @@ typst-pdf = "0.15"
 # defined in this crate, not re-exported through the `typst` facade, so it
 # must be a direct dependency to be nameable in our own code.
 typst-layout = "0.15"
+qrcode = { version = "0.14", default-features = false, features = ["svg"] }
+barcoders = { version = "2.0", default-features = false, features = ["svg", "std"] }
 
 [dev-dependencies]
 # Gives every `tests::common::spawn_app()` call its own throwaway SQLite

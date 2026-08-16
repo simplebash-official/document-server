@@ -1,7 +1,7 @@
 // Full-stack: real SQLite (a throwaway per-test file via
 // `common::spawn_app`), real render engine. Exercises the whole render
-// pipeline end to end against the seed `templates/receipt.typ` and
-// `templates/sticker.typ` templates.
+// pipeline end to end against the seed `templates/documents/receipt.typ` and
+// `templates/labels/sticker.typ` templates.
 
 mod common;
 
@@ -77,11 +77,89 @@ async fn render_receipt_returns_pdf_and_records_document() {
     assert_eq!(recorded_data, body);
 }
 
-/// Covers Phase 2's second template and its vendored `tiaoma`/`zebra`
-/// barcode/QR packages (`templates/lib/`) through the real HTTP pipeline —
-/// `clients::render::tests::warm_up_and_compile_sticker_produces_a_pdf`
-/// already covers the same template at the Typst-compiler level without a
-/// database; this is the end-to-end counterpart.
+#[tokio::test]
+async fn render_receipt_with_dynamic_barcode_and_qr_placeholders() {
+    let app = common::spawn_app().await;
+
+    let template_key: String = sqlx::query_scalar("SELECT key FROM templates WHERE name = ?")
+        .bind("receipt")
+        .fetch_one(&app.db)
+        .await
+        .expect("receipt template should be synced from disk by spawn_app");
+
+    // Dynamic QR code placeholder in receipt
+    let body_qr = json!({
+        "invoiceNumber": "INV-QR-99",
+        "customerName": "John Doe",
+        "items": [
+            {"description": "Grooming Deluxe", "quantity": 1, "unitPrice": 49.99},
+        ],
+        "total": 49.99,
+        "footerCode": {
+            "type": "qr",
+            "value": "https://jana2u.com/pay/inv_99",
+            "size": "18mm"
+        }
+    });
+
+    let response_qr = app
+        .router
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/render/{template_key}"))
+                .header("content-type", "application/json")
+                .body(Body::from(body_qr.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response_qr.status(), StatusCode::OK);
+    let pdf_bytes = axum::body::to_bytes(response_qr.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert!(pdf_bytes.starts_with(b"%PDF-"));
+
+    // Dynamic barcode placeholder in receipt
+    let body_barcode = json!({
+        "invoiceNumber": "INV-BC-101",
+        "customerName": "Alice Smith",
+        "items": [
+            {"description": "Nail Trim", "quantity": 1, "unitPrice": 15.00},
+        ],
+        "total": 15.00,
+        "footerCode": {
+            "type": "barcode",
+            "value": "INV-BC-101",
+            "symbology": "Code128",
+            "height": "10mm",
+            "showText": true
+        }
+    });
+
+    let response_bc = app
+        .router
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/render/{template_key}"))
+                .header("content-type", "application/json")
+                .body(Body::from(body_barcode.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response_bc.status(), StatusCode::OK);
+    let pdf_bytes_bc = axum::body::to_bytes(response_bc.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert!(pdf_bytes_bc.starts_with(b"%PDF-"));
+}
+
 #[tokio::test]
 async fn render_sticker_returns_pdf_and_records_document() {
     let app = common::spawn_app().await;
@@ -163,11 +241,6 @@ async fn render_unknown_template_returns_404() {
     assert_eq!(json["code"], "TEMPLATE_NOT_FOUND");
 }
 
-/// `receipt.typ` (the current seed template — a static, fully hand-designed
-/// Pubbles Pet Parlor mockup) never reads `sys.inputs` at all, so it can't
-/// 422 on a missing field; `sticker.typ` is the seed template that actually
-/// validates its input (`data.title`/`data.reference` access), so it's the
-/// one this regression guard targets.
 #[tokio::test]
 async fn render_sticker_with_missing_field_returns_422() {
     let app = common::spawn_app().await;

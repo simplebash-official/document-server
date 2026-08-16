@@ -1,14 +1,12 @@
 // HTTP layer for the templates module. `GET /` (list) and `GET /{key}`
-// (single template's metadata/data-contract) are both real as of Phase 2.
-// Unlike `render`/`documents`, there's no placeholder module-status stub
-// here — the collection root is itself the real "list templates" endpoint
-// from day one, so there's no unused path left for one (same convention
-// jana2u-pos's `suppliers` module uses).
+// (single template's metadata/data-contract).
 
 use axum::{
     Json,
-    extract::{Path, State},
+    extract::{Path, Query, State},
 };
+use serde::Deserialize;
+use utoipa::{IntoParams, ToSchema};
 use utoipa_axum::{router::OpenApiRouter, routes};
 
 use crate::{
@@ -18,7 +16,7 @@ use crate::{
         error::AppResult,
         response::{ApiResponse, ErrorResponse},
     },
-    domain::templates::{Template, TemplatesResponse},
+    domain::templates::{Template, TemplateType, TemplatesResponse},
     modules::templates::service,
 };
 
@@ -36,13 +34,27 @@ pub fn router() -> OpenApiRouter<AppState> {
 // Templates
 // ============================================================================
 
-#[utoipa::path(get, path = "/", tag = modules::TEMPLATES, responses(
-    (status = 200, description = "List templates (active and inactive)", body = ApiResponse<TemplatesResponse>)
-))]
+#[derive(Debug, Deserialize, IntoParams, ToSchema)]
+pub struct ListTemplatesQuery {
+    /// Filter templates by type: "document" or "label"
+    pub r#type: Option<String>,
+}
+
+#[utoipa::path(
+    get,
+    path = "/",
+    tag = modules::TEMPLATES,
+    params(ListTemplatesQuery),
+    responses(
+        (status = 200, description = "List templates (active and inactive)", body = ApiResponse<TemplatesResponse>)
+    )
+)]
 async fn list_templates(
     State(state): State<AppState>,
+    Query(query): Query<ListTemplatesQuery>,
 ) -> AppResult<Json<ApiResponse<TemplatesResponse>>> {
-    let response = service::list_templates(&state.db).await?;
+    let type_filter = query.r#type.and_then(|t| t.parse::<TemplateType>().ok());
+    let response = service::list_templates(&state.db, type_filter).await?;
 
     Ok(Json(ApiResponse::success(
         response,

@@ -71,6 +71,10 @@ async fn openapi_json_lists_all_module_paths() {
         "/api/documents",
         "/api/documents/{key}",
         "/api/documents/{key}/pdf",
+        "/api/barcodes",
+        "/api/barcodes/generate",
+        "/api/qrcodes",
+        "/api/qrcodes/generate",
     ] {
         assert!(paths.contains_key(expected), "missing path: {expected}");
     }

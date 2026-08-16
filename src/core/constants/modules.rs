@@ -3,3 +3,5 @@
 pub const RENDER: &str = "render";
 pub const TEMPLATES: &str = "templates";
 pub const DOCUMENTS: &str = "documents";
+pub const BARCODES: &str = "barcodes";
+pub const QRCODES: &str = "qrcodes";
