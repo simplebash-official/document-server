@@ -1,7 +1,9 @@
 // Pure business types shared across modules — no I/O, no framework types
 // beyond serde/utoipa derives.
 
+pub mod barcodes;
 pub mod documents;
+pub mod qrcodes;
 pub mod templates;
 
 use serde::Serialize;

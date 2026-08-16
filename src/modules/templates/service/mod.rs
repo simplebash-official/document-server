@@ -6,29 +6,30 @@
 use sqlx::SqlitePool;
 
 use crate::{
+    clients::render::DiscoveredTemplate,
     core::{
         constants::codes,
         error::{AppError, AppResult},
     },
-    domain::templates::{Template, TemplatesResponse},
+    domain::templates::{Template, TemplateType, TemplatesResponse},
     modules::templates::repository,
 };
 
-/// Every known template, in `name` order — backs `GET /api/templates`.
-/// Returns inactive templates too (an admin/human browsing metadata should
-/// see the full picture); `render`'s `get_active_template_by_key` is the
+/// Every known template, optionally filtered by `type` — backs `GET /api/templates`.
+/// Returns inactive templates too; `render`'s `get_active_template_by_key` is the
 /// one place that filters on `is_active`.
-pub(crate) async fn list_templates(db: &SqlitePool) -> AppResult<TemplatesResponse> {
-    let rows = repository::list_templates(db).await?;
+pub(crate) async fn list_templates(
+    db: &SqlitePool,
+    type_filter: Option<TemplateType>,
+) -> AppResult<TemplatesResponse> {
+    let rows = repository::list_templates(db, type_filter).await?;
     Ok(TemplatesResponse {
         templates: rows.into_iter().map(|row| row.into_template()).collect(),
     })
 }
 
 /// Fetch by `key` for `GET /api/templates/{key}` — 404s with
-/// `TEMPLATE_NOT_FOUND` if missing, but (unlike `get_active_template_by_key`
-/// below) does not filter on `is_active`: a caller inspecting a template's
-/// metadata/data-contract should be able to look up an inactive one too.
+/// `TEMPLATE_NOT_FOUND` if missing, but does not filter on `is_active`.
 pub(crate) async fn get_template_by_key(db: &SqlitePool, key: &str) -> AppResult<Template> {
     let row = repository::find_template_by_key(db, key)
         .await?
@@ -40,9 +41,7 @@ pub(crate) async fn get_template_by_key(db: &SqlitePool, key: &str) -> AppResult
 }
 
 /// Fetch by `key`, 404ing with `TEMPLATE_NOT_FOUND` if missing *or*
-/// inactive — an inactive template is treated the same as a nonexistent one
-/// from a caller's perspective. This is the entry point
-/// `modules::render::service` calls before compiling.
+/// inactive.
 pub(crate) async fn get_active_template_by_key(db: &SqlitePool, key: &str) -> AppResult<Template> {
     let row = repository::find_template_by_key(db, key)
         .await?
@@ -54,25 +53,21 @@ pub(crate) async fn get_active_template_by_key(db: &SqlitePool, key: &str) -> Ap
     Ok(row.into_template())
 }
 
-/// Upserts one `templates` row per name in `known_templates` (the `.typ`
-/// filename stems `clients::render::RenderEngine::warm_up` found on disk),
-/// marking each active. Called once from `main.rs` after the render engine
-/// warms up, and again by `tests::common::spawn_app` for the test
-/// database — `pub`, not `pub(crate)`, because `main.rs` is a separate
-/// binary crate under the lib/bin split and can't reach a `pub(crate)` item
-/// in the `pdf_server` library crate.
-///
-/// Deliberately does not deactivate a `templates` row whose `.typ` file was
-/// removed from disk — that's an operator decision (delete or deliberately
-/// deactivate), not something a routine sync should do silently, since a
-/// document referencing that template's key may still need to be looked up
-/// for audit purposes.
+/// Upserts one `templates` row per discovered template in `known_templates`,
+/// marking each active.
 pub async fn sync_templates_from_disk(
     db: &SqlitePool,
-    known_templates: &[String],
+    known_templates: &[DiscoveredTemplate],
 ) -> AppResult<()> {
-    for name in known_templates {
-        repository::upsert_template_by_name(db, name, true).await?;
+    for tpl in known_templates {
+        repository::upsert_template_by_name(
+            db,
+            &tpl.name,
+            tpl.template_type,
+            tpl.sample_data.as_ref(),
+            true,
+        )
+        .await?;
     }
     Ok(())
 }

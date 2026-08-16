@@ -6,11 +6,14 @@
 // the engine's lifecycle: reading fonts/templates off disk once and
 // building the `TypstEngine`.
 
+use std::collections::HashMap;
 use std::path::Path;
 
 use typst::foundations::Dict;
 use typst_as_lib::{TypstEngine, TypstTemplateCollection};
 use typst_layout::PagedDocument;
+
+use crate::domain::templates::TemplateType;
 
 /// Why `RenderEngine::warm_up` failed. A misconfigured `TEMPLATES_DIR`/
 /// `FONTS_DIR` is a hard startup error — same fail-fast posture as
@@ -30,13 +33,22 @@ pub enum RenderEngineError {
     },
 }
 
+/// Metadata about a template discovered on disk during startup scan.
+#[derive(Debug, Clone)]
+pub struct DiscoveredTemplate {
+    pub name: String,
+    pub file_path: String,
+    pub template_type: TemplateType,
+    pub sample_data: Option<serde_json::Value>,
+}
+
 pub struct RenderEngine {
     engine: TypstEngine<TypstTemplateCollection>,
-    // Every `.typ` filename stem found under `TEMPLATES_DIR` at warm-up
-    // time — feeds `templates::service::sync_templates_from_disk`'s upsert
-    // pass, so the `templates` collection and what's actually on disk never
-    // drift.
-    known_templates: Vec<String>,
+    // Every template found under `TEMPLATES_DIR` at warm-up time
+    // — feeds `templates::service::sync_templates_from_disk`'s upsert pass.
+    known_templates: Vec<DiscoveredTemplate>,
+    // Fast lookup from template name to relative file path
+    template_paths: HashMap<String, String>,
 }
 
 impl RenderEngine {
@@ -44,22 +56,9 @@ impl RenderEngine {
     /// memory (`.fonts()` takes owned bytes — a genuine preload), points
     /// the engine at `templates_dir` via `with_file_system_resolver` (which
     /// resolves `.typ` files, and any assets they reference, from disk by
-    /// relative path — `typst-as-lib` wraps this resolver in its own
-    /// `.into_cached()`, so each file is actually only ever read from disk
-    /// once per process lifetime, not once per request; a template edited
-    /// on disk while the server keeps running is *not* picked up until a
-    /// restart rebuilds this engine — see `documents::service::reprint_document`'s
-    /// doc comment for where that boundary actually matters, and CLAUDE.md's
-    /// Phase 4 for the unimplemented "hot-reload without a restart"), then
-    /// runs one best-effort trial compile per known template purely to
-    /// catch outright breakage (bad syntax, a missing asset, a bad font
-    /// family) before the first real request. A trial compile failing
-    /// because the template legitimately requires real input fields is the
-    /// common case (any template that actually takes input fails this
-    /// empty-`Dict` probe every time) — logged at `debug`, not `warn`, so it
-    /// doesn't read as a startup problem on every single run; the one true
-    /// validation of "does this render successfully with realistic data" is
-    /// `tests/render_test.rs`, not this pass.
+    /// relative path), then runs one best-effort trial compile per known
+    /// template purely to catch outright breakage (bad syntax, a missing asset,
+    /// a bad font family) before the first real request.
     pub fn warm_up(
         templates_dir: impl AsRef<Path>,
         fonts_dir: impl AsRef<Path>,
@@ -68,26 +67,28 @@ impl RenderEngine {
         let fonts_dir = fonts_dir.as_ref();
 
         let fonts = read_font_files(fonts_dir)?;
-        let known_templates = read_template_stems(templates_dir)?;
+        let known_templates = scan_templates(templates_dir)?;
+
+        let mut template_paths = HashMap::new();
+        for tpl in &known_templates {
+            template_paths.insert(tpl.name.clone(), tpl.file_path.clone());
+        }
 
         let engine = TypstEngine::builder()
             .fonts(fonts)
             .with_file_system_resolver(templates_dir.to_path_buf())
             .build();
 
-        for name in &known_templates {
-            let file_name = format!("{name}.typ");
+        for tpl in &known_templates {
             let warned: typst::diag::Warned<Result<PagedDocument, typst_as_lib::TypstAsLibError>> =
-                engine.compile_with_input(file_name.as_str(), Dict::new());
+                engine.compile_with_input(&*tpl.file_path, Dict::new());
             if let Err(err) = warned.output {
                 // `debug`, not `warn`: a template that reads any field off
                 // its input will *always* fail this empty-`Dict` probe —
-                // that's the normal, expected case for every real template,
-                // not a signal worth surfacing under the default `info`
-                // filter. It's still one `RUST_LOG=pdf_server=debug` away
-                // when actually diagnosing a template that won't compile.
+                // that's the normal, expected case for every real template.
                 tracing::debug!(
-                    template = %name,
+                    template = %tpl.name,
+                    path = %tpl.file_path,
                     error = %err,
                     "template failed its startup trial compile (expected if it just needs real input data)"
                 );
@@ -97,24 +98,26 @@ impl RenderEngine {
         Ok(Self {
             engine,
             known_templates,
+            template_paths,
         })
     }
 
-    pub fn known_templates(&self) -> &[String] {
+    pub fn known_templates(&self) -> &[DiscoveredTemplate] {
         &self.known_templates
     }
 
-    /// Raw typst-as-lib call, untranslated (compile errors stay as
-    /// `TypstAsLibError`). `pub(crate)` — only
-    /// `modules::render::repository::typst` (same crate) needs it; that's
-    /// where the `AppError` translation happens.
+    /// Compiles a template by name with given input dictionary.
     pub(crate) fn compile(
         &self,
         template_name: &str,
         input: Dict,
     ) -> typst::diag::Warned<Result<PagedDocument, typst_as_lib::TypstAsLibError>> {
-        let file_name = format!("{template_name}.typ");
-        self.engine.compile_with_input(file_name.as_str(), input)
+        let file_path = self
+            .template_paths
+            .get(template_name)
+            .cloned()
+            .unwrap_or_else(|| format!("{template_name}.typ"));
+        self.engine.compile_with_input(&*file_path, input)
     }
 }
 
@@ -144,28 +147,94 @@ fn read_font_files(dir: &Path) -> Result<Vec<Vec<u8>>, RenderEngineError> {
     Ok(fonts)
 }
 
-fn read_template_stems(dir: &Path) -> Result<Vec<String>, RenderEngineError> {
+/// Scans `TEMPLATES_DIR` for `.typ` files in `documents/`, `labels/`, or root.
+/// Skips `lib/` and non-typ files.
+fn scan_templates(dir: &Path) -> Result<Vec<DiscoveredTemplate>, RenderEngineError> {
+    let mut templates = Vec::new();
+
     let entries =
         std::fs::read_dir(dir).map_err(|source| RenderEngineError::TemplatesDirUnreadable {
             path: dir.to_path_buf(),
             source,
         })?;
 
-    let mut names = Vec::new();
     for entry in entries {
         let entry = entry.map_err(|source| RenderEngineError::TemplatesDirUnreadable {
             path: dir.to_path_buf(),
             source,
         })?;
         let path = entry.path();
-        if path.extension().and_then(|ext| ext.to_str()) == Some("typ")
+        let file_name = entry.file_name();
+        let file_name_str = file_name.to_string_lossy();
+
+        if file_name_str == "lib" || file_name_str.starts_with('.') {
+            continue;
+        }
+
+        if path.is_dir() {
+            let sub_type = if file_name_str == "labels" {
+                TemplateType::Label
+            } else {
+                TemplateType::Document
+            };
+
+            let sub_entries = std::fs::read_dir(&path).map_err(|source| {
+                RenderEngineError::TemplatesDirUnreadable {
+                    path: path.clone(),
+                    source,
+                }
+            })?;
+
+            for sub_entry in sub_entries {
+                let sub_entry =
+                    sub_entry.map_err(|source| RenderEngineError::TemplatesDirUnreadable {
+                        path: path.clone(),
+                        source,
+                    })?;
+                let sub_path = sub_entry.path();
+                if sub_path.extension().and_then(|ext| ext.to_str()) == Some("typ")
+                    && let Some(stem) = sub_path.file_stem().and_then(|s| s.to_str())
+                {
+                    let json_path = sub_path.with_extension("json");
+                    let sample_data = if json_path.is_file() {
+                        std::fs::read_to_string(&json_path)
+                            .ok()
+                            .and_then(|c| serde_json::from_str::<serde_json::Value>(&c).ok())
+                    } else {
+                        None
+                    };
+
+                    templates.push(DiscoveredTemplate {
+                        name: stem.to_string(),
+                        file_path: format!("{file_name_str}/{stem}.typ"),
+                        template_type: sub_type,
+                        sample_data,
+                    });
+                }
+            }
+        } else if path.extension().and_then(|ext| ext.to_str()) == Some("typ")
             && let Some(stem) = path.file_stem().and_then(|s| s.to_str())
         {
-            names.push(stem.to_string());
+            let json_path = path.with_extension("json");
+            let sample_data = if json_path.is_file() {
+                std::fs::read_to_string(&json_path)
+                    .ok()
+                    .and_then(|c| serde_json::from_str::<serde_json::Value>(&c).ok())
+            } else {
+                None
+            };
+
+            templates.push(DiscoveredTemplate {
+                name: stem.to_string(),
+                file_path: format!("{stem}.typ"),
+                template_type: TemplateType::Document,
+                sample_data,
+            });
         }
     }
-    names.sort();
-    Ok(names)
+
+    templates.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(templates)
 }
 
 #[cfg(test)]
@@ -174,13 +243,15 @@ mod tests {
 
     use super::*;
 
-    /// No database involved — exercises the real `templates/receipt.typ` +
-    /// `fonts/` against the real Typst compiler, confirming `sys.inputs`
-    /// threading and PDF export both actually work end to end.
     #[test]
     fn warm_up_and_compile_receipt_produces_a_pdf() {
         let engine = RenderEngine::warm_up("templates", "fonts").expect("warm_up should succeed");
-        assert!(engine.known_templates().contains(&"receipt".to_string()));
+        assert!(
+            engine
+                .known_templates()
+                .iter()
+                .any(|t| t.name == "receipt" && t.template_type == TemplateType::Document)
+        );
 
         let mut items = Vec::new();
         let mut item = Dict::new();
@@ -206,17 +277,17 @@ mod tests {
         assert!(pdf_bytes.starts_with(b"%PDF-"));
     }
 
-    /// Same shape as the receipt test above, but for `templates/sticker.typ`
-    /// — confirms the vendored `tiaoma`/`zebra` barcode/QR packages
-    /// (`templates/lib/`) actually resolve and compile through the
-    /// file-system resolver, including their WASM plugins.
     #[test]
     fn warm_up_and_compile_sticker_produces_a_pdf() {
         let engine = RenderEngine::warm_up("templates", "fonts").expect("warm_up should succeed");
-        assert!(engine.known_templates().contains(&"sticker".to_string()));
-        // The vendored library files must never be mistaken for top-level
-        // templates themselves.
-        assert!(!engine.known_templates().contains(&"lib".to_string()));
+        assert!(
+            engine
+                .known_templates()
+                .iter()
+                .any(|t| t.name == "sticker" && t.template_type == TemplateType::Label)
+        );
+        // The vendored library files must never be mistaken for templates.
+        assert!(!engine.known_templates().iter().any(|t| t.name == "lib"));
 
         let mut input = Dict::new();
         input.insert(Str::from("title"), "USB-C Cable".into_value());

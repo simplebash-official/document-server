@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "0883660c-a4fe-456e-9da8-aa21dd56016c",
     "name": "pdf-server",
-    "description": "Standalone Rust/Axum service that renders PDFs from Typst templates. **No authentication** — every route here is open, so there is no Bearer/API-key setup needed.\n\nBase URL (and sample keys) are environment variables — switch the active Postman environment (Development/Production) to point requests at the right instance.\n\n**Phase 3 status**: `Render`, `Templates`, and `Documents` are all fully real now — every module has dropped its module-status stub in favor of a real collection-root endpoint.\n\n**Getting real template keys**: the seed `receipt`/`sticker` templates are created automatically the first time the server starts (see `templates/receipt.typ`/`templates/sticker.typ`). Easiest path: run `Templates > List Templates` and copy the `key` values from the response into the environment's `templateKey`/`stickerKey` variables. (Or read them directly from SQLite: `sqlite3 pdf_server.db \"SELECT key, name FROM templates;\"`.)\n\n**Getting a real document key**: run `Render > Render Receipt` or `Render > Render Sticker` once, then `Documents > List Documents` and copy a `key` into the environment's `documentKey` variable — or read `sqlite3 pdf_server.db \"SELECT key FROM documents;\"` directly.",
+    "description": "Standalone Rust/Axum service that renders PDFs from Typst templates and generates standalone 1D barcodes and 2D QR codes. **No authentication** — every route here is open, so there is no Bearer/API-key setup needed.\n\nBase URL (and sample keys) are environment variables — switch the active Postman environment (Development/Production) to point requests at the right instance.\n\n**Modules**:\n- `Health`: Liveness probe (`/api/health`).\n- `Render`: PDF rendering endpoint (`/api/render/{templateKey}`) with dynamic barcode/QR placeholder support.\n- `Templates`: Template metadata listing and retrieval (`/api/templates`), categorized into `document` and `label` with `?type=document|label` filtering.\n- `Documents`: Document history and recompilation reprints (`/api/documents/{key}/pdf`).\n- `Barcodes`: Standalone 1D barcode generator (`/api/barcodes/generate`) supporting JSON and direct SVG streaming (Code128, Code39, EAN13, EAN8).\n- `QRCodes`: Standalone 2D QR code generator (`/api/qrcodes/generate`) supporting JSON and direct SVG streaming (ECC levels L, M, Q, H).\n\n**Getting real template keys**: run `Templates > List Templates` and copy the `key` values into `templateKey` (receipt document) or `stickerKey` (sticker label).\n\n**Getting a real document key**: run `Render > Render Receipt` once, then `Documents > List Documents` and copy a `key` into `documentKey`.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -59,14 +59,14 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"invoiceNumber\": \"INV-0001\",\n  \"customerName\": \"Jane Doe\",\n  \"items\": [\n    { \"description\": \"Widget\", \"quantity\": 2, \"unitPrice\": 9.99 },\n    { \"description\": \"Gadget\", \"quantity\": 1, \"unitPrice\": 19.99 }\n  ],\n  \"total\": 39.97\n}",
+              "raw": "{\n  \"invoiceNumber\": \"INV-0001\",\n  \"customerName\": \"Jane Doe\",\n  \"items\": [\n    { \"description\": \"Widget\", \"quantity\": 2, \"unitPrice\": 9.99 },\n    { \"description\": \"Gadget\", \"quantity\": 1, \"unitPrice\": 19.99 }\n  ],\n  \"total\": 39.97,\n  \"footerCode\": {\n    \"type\": \"qr\",\n    \"value\": \"https://jana2u.com/pay/inv_0001\",\n    \"size\": \"18mm\"\n  }\n}",
               "options": {
                 "raw": {
                   "language": "json"
                 }
               }
             },
-            "description": "Compiles the `receipt` template (see `templates/receipt.typ`'s header comment for its full JSON contract) against this request body and returns the rendered PDF as raw bytes — `Content-Type: application/pdf`, **not** the usual `{success, data, message}` envelope every other endpoint in this collection uses. Postman will offer to preview or save the response as a PDF.\n\nErrors still go through the standard envelope: 404 `TEMPLATE_NOT_FOUND` for an unknown/inactive `{{templateKey}}`, 422 `RENDER_VALIDATION_FAILED` if the body doesn't satisfy the template's data contract, 500 `PDF_EXPORT_FAILED` on export failure."
+            "description": "Compiles the `receipt` document template against this request body and returns the rendered PDF as raw bytes (`Content-Type: application/pdf`). Supports dynamic barcode or QR code injection via `footerCode` placeholder slot.\n\nErrors return standard `{success, message, code, statusCode}` JSON: 404 `TEMPLATE_NOT_FOUND`, 422 `RENDER_VALIDATION_FAILED`, 500 `PDF_EXPORT_FAILED`."
           },
           "response": []
         },
@@ -94,7 +94,7 @@
                 }
               }
             },
-            "description": "Compiles the `sticker` template (see `templates/sticker.typ`'s header comment) — a 50mm×30mm print label with a Code128 barcode and a QR code (both encoding `reference`), generated by the vendored `tiaoma`/`zebra` Typst packages under `templates/lib/`. Same response shape and error codes as Render Receipt — raw PDF bytes on success, the standard envelope on 404/422/500."
+            "description": "Compiles the `sticker` label template (50mm×30mm thermal label) with a Code128 barcode and QR code encoding `reference` via `templates/lib/codes.typ`. Returns raw PDF bytes on success."
           },
           "response": []
         }
@@ -111,9 +111,57 @@
             "url": {
               "raw": "{{baseUrl}}/api/templates",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "templates"]
+              "path": ["api", "templates"],
+              "query": [
+                {
+                  "key": "type",
+                  "value": "document",
+                  "description": "Optional filter: 'document' or 'label'",
+                  "disabled": true
+                }
+              ]
             },
-            "description": "Lists every template's metadata (both active and inactive), sorted by name. Use this to find the real `key` values for `{{templateKey}}`/`{{stickerKey}}` on a fresh instance."
+            "description": "Lists template metadata (active and inactive), including category `type` (`document` or `label`), sorted by name. Supports optional `?type=document` or `?type=label` query filter."
+          },
+          "response": []
+        },
+        {
+          "name": "List Document Templates",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/templates?type=document",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "templates"],
+              "query": [
+                {
+                  "key": "type",
+                  "value": "document"
+                }
+              ]
+            },
+            "description": "Lists only document templates (`templates/documents/`)."
+          },
+          "response": []
+        },
+        {
+          "name": "List Label Templates",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/templates?type=label",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "templates"],
+              "query": [
+                {
+                  "key": "type",
+                  "value": "label"
+                }
+              ]
+            },
+            "description": "Lists only label templates (`templates/labels/`)."
           },
           "response": []
         },
@@ -127,7 +175,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "templates", "{{templateKey}}"]
             },
-            "description": "Fetch one template's metadata/data-contract by `key`. 404 `TEMPLATE_NOT_FOUND` if the key doesn't exist (this does *not* filter on `isActive` the way rendering does — an inactive template's metadata is still fetchable here)."
+            "description": "Fetch one template's metadata by `key` (including `name`, `type`, `description`, `data` expected payload sub-object, `isActive`). 404 `TEMPLATE_NOT_FOUND` if key doesn't exist."
           },
           "response": []
         }
@@ -146,7 +194,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "documents"]
             },
-            "description": "Lists every recorded document (one row per successful render, written by `Render Receipt`/`Render Sticker`), newest first. Use this to find a real `key` for `{{documentKey}}`."
+            "description": "Lists every recorded document (written upon successful render), newest first. Use this to find a real `key` for `{{documentKey}}`."
           },
           "response": []
         },
@@ -160,7 +208,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "documents", "{{documentKey}}"]
             },
-            "description": "Fetch one document's record by `key` — the template it was rendered from (`templateKey`), the exact JSON `data` it was rendered with, and `fileSizeBytes`. Does **not** return the PDF itself (no PDF bytes are stored — see Reprint Document for that). 404 `DOCUMENT_NOT_FOUND` if the key doesn't exist."
+            "description": "Fetch one document's metadata by `key` (templateKey, JSON data, and fileSizeBytes). 404 `DOCUMENT_NOT_FOUND` if the key doesn't exist."
           },
           "response": []
         },
@@ -174,7 +222,158 @@
               "host": ["{{baseUrl}}"],
               "path": ["api", "documents", "{{documentKey}}", "pdf"]
             },
-            "description": "Re-renders this document's stored `data` against the template and returns raw PDF bytes — `Content-Type: application/pdf`, same binary-response deviation as Render Receipt/Render Sticker. Not a cached copy of the original PDF (none is stored): this recompiles, so a template fix made *and the server restarted* since the original render shows up here too — see CLAUDE.md's \"Documents as first-class resources\" section for the exact boundary (recompiles against the template as of the server's last startup, not literally live disk edits).\n\n404 `DOCUMENT_NOT_FOUND` if the key doesn't exist; 422/500 in the same shape as rendering, if the stored data somehow no longer satisfies the (possibly since-changed) template."
+            "description": "Recompiles this document's stored JSON `data` against its template and returns raw PDF bytes (`Content-Type: application/pdf`)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Barcodes",
+      "item": [
+        {
+          "name": "Barcodes Module Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/barcodes",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "barcodes"]
+            },
+            "description": "Module status check for the Barcodes service."
+          },
+          "response": []
+        },
+        {
+          "name": "Generate Barcode (JSON)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/barcodes/generate",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "barcodes", "generate"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"INV-123456\",\n  \"symbology\": \"code128\",\n  \"height\": 80\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Generates a 1D barcode and returns a JSON response containing SVG markup (`{ success: true, data: { content, symbology, svg } }`). Supported symbologies: `code128`, `code39`, `ean13`, `ean8`."
+          },
+          "response": []
+        },
+        {
+          "name": "Generate Barcode (SVG Stream)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/barcodes/generate?content=INV-123456&symbology=code128&height=80",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "barcodes", "generate"],
+              "query": [
+                {
+                  "key": "content",
+                  "value": "INV-123456",
+                  "description": "Text payload to encode"
+                },
+                {
+                  "key": "symbology",
+                  "value": "code128",
+                  "description": "code128 | code39 | ean13 | ean8 (default: code128)"
+                },
+                {
+                  "key": "height",
+                  "value": "80",
+                  "description": "Barcode height in pixels (default: 80)"
+                }
+              ]
+            },
+            "description": "Generates a 1D barcode and streams the raw SVG directly with `Content-Type: image/svg+xml`."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "QR Codes",
+      "item": [
+        {
+          "name": "QR Codes Module Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/qrcodes",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "qrcodes"]
+            },
+            "description": "Module status check for the QR Codes service."
+          },
+          "response": []
+        },
+        {
+          "name": "Generate QR Code (JSON)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/qrcodes/generate",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "qrcodes", "generate"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"https://jana2u.com/pay/INV-123456\",\n  \"ecc\": \"M\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Generates a 2D QR code and returns a JSON response containing SVG markup (`{ success: true, data: { content, ecc, svg } }`). Supported ECC levels: `L`, `M`, `Q`, `H`."
+          },
+          "response": []
+        },
+        {
+          "name": "Generate QR Code (SVG Stream)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/qrcodes/generate?content=https://jana2u.com/pay/INV-123456&ecc=M",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "qrcodes", "generate"],
+              "query": [
+                {
+                  "key": "content",
+                  "value": "https://jana2u.com/pay/INV-123456",
+                  "description": "Content or URL to encode in the QR code"
+                },
+                {
+                  "key": "ecc",
+                  "value": "M",
+                  "description": "Error correction level: L | M | Q | H (default: M)"
+                }
+              ]
+            },
+            "description": "Generates a 2D QR code and streams the raw SVG directly with `Content-Type: image/svg+xml`."
           },
           "response": []
         }

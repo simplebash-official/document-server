@@ -1,0 +1,28 @@
+{
+  "invoiceNumber": "PPmay056",
+  "customerName": "Jane Doe",
+  "items": [
+    {
+      "description": "Woof & Floof",
+      "quantity": 1,
+      "unitPrice": 72.25
+    },
+    {
+      "description": "Snout & About",
+      "quantity": 1,
+      "unitPrice": 46.75
+    },
+    {
+      "description": "Paws & Jaws",
+      "quantity": 2,
+      "unitPrice": 30.60
+    }
+  ],
+  "total": 157.08,
+  "footerCode": {
+    "type": "barcode",
+    "value": "PPmay056",
+    "symbology": "Code128",
+    "height": 9
+  }
+}

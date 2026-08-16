@@ -5,9 +5,8 @@
 // }
 //
 // Sized for a 50mm x 30mm thermal label — a common print-label size for
-// product/repair-ticket stickers, not just an on-screen preview size.
-#import "lib/tiaoma/lib.typ": code128
-#import "lib/zebra/lib.typ": qrcode
+// product/repair-ticket stickers.
+#import "../lib/codes.typ": barcode, qrcode
 
 #let data = sys.inputs
 
@@ -21,7 +20,7 @@
   [
     #data.title
     #v(2pt)
-    #code128(data.reference, height: 8mm)
+    #barcode(data.reference, height: 8mm, show-text: false)
     #v(1pt)
     #data.reference
   ],
