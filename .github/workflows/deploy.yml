@@ -1,0 +1,94 @@
+name: Deploy Document Server
+
+on:
+  push:
+    branches: [main]
+
+env:
+  BINARY_NAME: document_server
+  SERVICE_NAME: document-server
+  DEPLOY_PATH: /opt/document-server
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo registry and build artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run checks (fmt, clippy, tests)
+        run: make ci
+
+  build-and-deploy:
+    needs: ci
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry and build artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build release binary
+        run: cargo build --release
+
+      - name: Package templates and fonts
+        run: tar -czf assets.tar.gz templates fonts
+
+      - name: Install SSH key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
+
+      - name: Add server to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Generate production .env file
+        run: |
+          cat << EOF > production.env
+          DATABASE_URL=sqlite://document_server.db
+          PORT=8090
+          TEMPLATES_DIR=templates
+          FONTS_DIR=fonts
+          MAX_RENDER_BODY_BYTES=5242880
+          RUST_LOG=document_server=info,tower_http=info,info
+          EOF
+
+      - name: Upload binary, .env, and assets to server
+        run: |
+          ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} 'mkdir -p ${{ env.DEPLOY_PATH }}'
+          scp target/release/${{ env.BINARY_NAME }} \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ env.DEPLOY_PATH }}/${{ env.BINARY_NAME }}.new
+          scp production.env \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ env.DEPLOY_PATH }}/.env.new
+          scp assets.tar.gz \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ env.DEPLOY_PATH }}/assets.tar.gz.new
+
+      - name: Swap binary/env/assets and restart service
+        run: |
+          ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} '
+            set -e
+            chmod +x ${{ env.DEPLOY_PATH }}/${{ env.BINARY_NAME }}.new
+            mv ${{ env.DEPLOY_PATH }}/${{ env.BINARY_NAME }}.new ${{ env.DEPLOY_PATH }}/${{ env.BINARY_NAME }}
+            chmod 600 ${{ env.DEPLOY_PATH }}/.env.new
+            mv ${{ env.DEPLOY_PATH }}/.env.new ${{ env.DEPLOY_PATH }}/.env
+            rm -rf ${{ env.DEPLOY_PATH }}/templates ${{ env.DEPLOY_PATH }}/fonts
+            tar -xzf ${{ env.DEPLOY_PATH }}/assets.tar.gz.new -C ${{ env.DEPLOY_PATH }}
+            rm ${{ env.DEPLOY_PATH }}/assets.tar.gz.new
+            sudo systemctl restart ${{ env.SERVICE_NAME }}
+            sleep 2
+            sudo systemctl is-active ${{ env.SERVICE_NAME }}
+          '
