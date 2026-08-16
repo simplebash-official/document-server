@@ -69,6 +69,8 @@ async fn openapi_json_lists_all_module_paths() {
         "/api/templates",
         "/api/templates/{key}",
         "/api/documents",
+        "/api/documents/{key}",
+        "/api/documents/{key}/pdf",
     ] {
         assert!(paths.contains_key(expected), "missing path: {expected}");
     }
@@ -99,6 +101,34 @@ async fn render_endpoint_is_documented_as_pdf_response() {
             .as_object()
             .is_some_and(|c| c.contains_key("application/pdf")),
         "render endpoint's 200 response isn't documented as application/pdf: {responses}"
+    );
+}
+
+#[tokio::test]
+async fn reprint_endpoint_is_documented_as_pdf_response() {
+    let router = build_test_app().await;
+
+    let response = router
+        .oneshot(
+            Request::builder()
+                .uri("/api-docs/openapi.json")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+    let responses = &json["paths"]["/api/documents/{key}/pdf"]["get"]["responses"]["200"];
+    assert!(
+        responses["content"]
+            .as_object()
+            .is_some_and(|c| c.contains_key("application/pdf")),
+        "reprint endpoint's 200 response isn't documented as application/pdf: {responses}"
     );
 }
 

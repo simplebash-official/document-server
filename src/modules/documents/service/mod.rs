@@ -1,13 +1,18 @@
-// Business rules for the documents feature. Currently just the one write
-// path: recording a successful render. Delegates all SQLite access to
-// `super::repository`.
+// Business rules for the documents feature: recording a successful render,
+// and (as of Phase 3) reading records back — list, get one, and reprint.
+// Delegates all SQLite access to `super::repository`.
 
 use sqlx::SqlitePool;
 
 use crate::{
-    core::{constants::prefixes, error::AppResult, id::generate_id},
-    domain::documents::Document,
-    modules::documents::repository,
+    clients::render::RenderEngine,
+    core::{
+        constants::{codes, prefixes},
+        error::{AppError, AppResult},
+        id::generate_id,
+    },
+    domain::documents::{Document, DocumentsResponse},
+    modules::{documents::repository, render, templates},
 };
 
 /// Records a successful render. Stores `data`, not the PDF bytes — a
@@ -25,4 +30,55 @@ pub(crate) async fn record_document(
     let key = generate_id(prefixes::DOCUMENT);
     let row = repository::insert_document(db, &key, template_key, data, file_size_bytes).await?;
     Ok(row.into_document())
+}
+
+/// Every recorded document, newest first — backs `GET /api/documents`.
+pub(crate) async fn list_documents(db: &SqlitePool) -> AppResult<DocumentsResponse> {
+    let rows = repository::list_documents(db).await?;
+    Ok(DocumentsResponse {
+        documents: rows.into_iter().map(|row| row.into_document()).collect(),
+    })
+}
+
+/// Fetch by `key` for `GET /api/documents/{key}` — 404s with
+/// `DOCUMENT_NOT_FOUND` if missing.
+pub(crate) async fn get_document_by_key(db: &SqlitePool, key: &str) -> AppResult<Document> {
+    let row = repository::find_document_by_key(db, key)
+        .await?
+        .ok_or_else(|| {
+            AppError::not_found_with_code("Document not found", codes::DOCUMENT_NOT_FOUND)
+        })?;
+
+    Ok(row.into_document())
+}
+
+/// Re-renders a previously-recorded document from its stored `data` by
+/// recompiling against the template, not a cached copy of the original PDF
+/// bytes (none are stored — see spec §6.2). Backs `GET /api/documents/{key}/pdf`.
+///
+/// "Recompiling" here means "against whatever `RenderEngine` loaded at its
+/// last `warm_up()`", not literally the `.typ` file's current on-disk bytes
+/// — `with_file_system_resolver`'s underlying resolver is
+/// `.into_cached()`'d by `typst-as-lib`, so a template edited on disk while
+/// the server keeps running is *not* picked up until a restart. A template
+/// fix followed by a restart benefits every historical document's reprint,
+/// same idea as jana2u-pos's usual "genuinely fresh, not stale" guarantees,
+/// just scoped to "fresh as of last boot" rather than "fresh this instant"
+/// — true hot-reload is unimplemented Phase 4 work (see CLAUDE.md's Build
+/// Phases).
+///
+/// Looked up via `templates::service::get_template_by_key` — deliberately
+/// *not* the `_active_` variant `render::service::render_template` uses:
+/// deactivating a template is an editorial decision about future renders,
+/// not a statement that history rendered against it stops being
+/// reprintable, so an inactive template must still work here.
+pub(crate) async fn reprint_document(
+    db: &SqlitePool,
+    render_engine: &RenderEngine,
+    key: &str,
+) -> AppResult<Vec<u8>> {
+    let document = get_document_by_key(db, key).await?;
+    let template = templates::service::get_template_by_key(db, &document.template_key).await?;
+
+    render::service::compile_pdf(render_engine, &template.name, document.data)
 }

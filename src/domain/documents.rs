@@ -23,3 +23,10 @@ pub struct Document {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
+
+/// Response body for `GET /api/documents`.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentsResponse {
+    pub documents: Vec<Document>,
+}
