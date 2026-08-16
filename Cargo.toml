@@ -1,8 +1,8 @@
 [package]
-name = "pdf_server"
+name = "document_server"
 version = "0.1.0"
 edition = "2024"
-default-run = "pdf_server"
+default-run = "document_server"
 
 [dependencies]
 axum = "0.8.9"

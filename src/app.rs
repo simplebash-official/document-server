@@ -64,7 +64,7 @@ pub fn build_router(state: AppState) -> Router {
     use crate::core::constants::modules as mod_names;
 
     // There is no authentication layer anywhere below this line, and none
-    // is added anywhere else in this codebase — pdf_server has no auth
+    // is added anywhere else in this codebase — document_server has no auth
     // concept at all (see spec's Auth section). There is deliberately no
     // extractor like jana2u-pos's `CurrentUser`/`AdminUser`, no
     // PUBLIC_ROUTES allowlist, and no `authorization_test.rs` equivalent,

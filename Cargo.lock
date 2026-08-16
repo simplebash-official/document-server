@@ -667,6 +667,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "document_server"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "barcoders",
+ "chrono",
+ "dotenvy",
+ "nanoid",
+ "qrcode",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "tower",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+ "typst",
+ "typst-as-lib",
+ "typst-layout",
+ "typst-pdf",
+ "utoipa",
+ "utoipa-axum",
+ "utoipa-swagger-ui",
+]
+
+[[package]]
 name = "dotenvy"
 version = "0.15.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2050,35 +2079,6 @@ dependencies = [
  "itoa",
  "memchr",
  "ryu",
-]
-
-[[package]]
-name = "pdf_server"
-version = "0.1.0"
-dependencies = [
- "axum",
- "barcoders",
- "chrono",
- "dotenvy",
- "nanoid",
- "qrcode",
- "serde",
- "serde_json",
- "sqlx",
- "tempfile",
- "thiserror",
- "tokio",
- "tower",
- "tower-http",
- "tracing",
- "tracing-subscriber",
- "typst",
- "typst-as-lib",
- "typst-layout",
- "typst-pdf",
- "utoipa",
- "utoipa-axum",
- "utoipa-swagger-ui",
 ]
 
 [[package]]

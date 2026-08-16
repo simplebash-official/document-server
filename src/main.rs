@@ -8,7 +8,7 @@
 
 use std::sync::Arc;
 
-use pdf_server::{
+use document_server::{
     app, app::AppState, clients, clients::render::RenderEngine, core::config::Config,
     modules::templates,
 };
@@ -23,7 +23,7 @@ async fn main() {
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| EnvFilter::new("pdf_server=info,tower_http=info,info")),
+                .unwrap_or_else(|_| EnvFilter::new("document_server=info,tower_http=info,info")),
         )
         .init();
 
