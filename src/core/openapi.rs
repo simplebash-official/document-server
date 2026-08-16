@@ -9,8 +9,8 @@ use utoipa::OpenApi;
 #[derive(OpenApi)]
 #[openapi(
     info(
-        title = "pdf-server API",
-        description = "Standalone Typst-based PDF rendering service for jana2u-pos: renders a named template against a JSON payload and returns a PDF. No authentication — every route is open.",
+        title = "document-server API",
+        description = "Standalone Typst-based document rendering service for jana2u-pos: renders a named template against a JSON payload and returns a PDF. No authentication — every route is open.",
         version = "0.1.0"
     ),
     tags(

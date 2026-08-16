@@ -1,7 +1,7 @@
 {
   "info": {
     "_postman_id": "0883660c-a4fe-456e-9da8-aa21dd56016c",
-    "name": "pdf-server",
+    "name": "document-server",
     "description": "Standalone Rust/Axum service that renders PDFs from Typst templates and generates standalone 1D barcodes and 2D QR codes. **No authentication** — every route here is open, so there is no Bearer/API-key setup needed.\n\nBase URL (and sample keys) are environment variables — switch the active Postman environment (Development/Production) to point requests at the right instance.\n\n**Modules**:\n- `Health`: Liveness probe (`/api/health`).\n- `Render`: PDF rendering endpoint (`/api/render/{templateKey}`) with dynamic barcode/QR placeholder support.\n- `Templates`: Template metadata listing and retrieval (`/api/templates`), categorized into `document` and `label` with `?type=document|label` filtering.\n- `Documents`: Document history and recompilation reprints (`/api/documents/{key}/pdf`).\n- `Barcodes`: Standalone 1D barcode generator (`/api/barcodes/generate`) supporting JSON and direct SVG streaming (Code128, Code39, EAN13, EAN8).\n- `QRCodes`: Standalone 2D QR code generator (`/api/qrcodes/generate`) supporting JSON and direct SVG streaming (ECC levels L, M, Q, H).\n\n**Getting real template keys**: run `Templates > List Templates` and copy the `key` values into `templateKey` (receipt document) or `stickerKey` (sticker label).\n\n**Getting a real document key**: run `Render > Render Receipt` once, then `Documents > List Documents` and copy a `key` into `documentKey`.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },

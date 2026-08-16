@@ -5,7 +5,7 @@ use std::env;
 /// reads environment variables directly.
 #[derive(Debug, Clone)]
 pub struct Config {
-    /// An `sqlx` SQLite connection string, e.g. `sqlite://pdf_server.db`
+    /// An `sqlx` SQLite connection string, e.g. `sqlite://document_server.db`
     /// (relative to the working directory the binary is run from) or
     /// `sqlite:///absolute/path/to.db`. The file is created automatically
     /// if it doesn't exist — see `clients::sqlite::connect`.
@@ -34,7 +34,7 @@ impl Config {
         // SQLite file needs no separate service to point at, so a fresh
         // checkout works with zero `.env` setup.
         let database_url =
-            env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite://pdf_server.db".to_string());
+            env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite://document_server.db".to_string());
 
         // Deliberately not 8080 (jana2u-pos's backend default) — so this
         // service and that one can both run locally at once without a port

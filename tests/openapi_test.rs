@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
-use pdf_server::{
+use document_server::{
     app, app::AppState, clients, clients::render::RenderEngine, core::config::Config,
 };
 use tower::ServiceExt;

@@ -10,18 +10,18 @@ This codebase follows jana2u-pos's backend conventions (`core/error.rs`, `core/r
 
 ## Commands
 
-- `cargo build` / `cargo run` (equivalent to `cargo run --bin pdf_server`)
+- `cargo build` / `cargo run` (equivalent to `cargo run --bin document_server`)
 - `cargo test` — every test needs no external service: all integration tests open their own throwaway SQLite file per test (see `tests/common::spawn_app()`), and `clients::render::tests::warm_up_and_compile_receipt_produces_a_pdf` (a `#[cfg(test)]` unit test in `src/clients/render.rs`) needs no database at all — it exercises the real Typst compiler against the real `templates/`/`fonts/` directories.
 - `cargo fmt` / `cargo fmt --check`
 - `make check` — `cargo fmt --check` → `cargo clippy --all-targets --all-features -- -D warnings` → `cargo test`, stopping at the first failure. Run this after every change.
 
 **Every change must be tested** — extend an existing test file covering the touched area, or create one following `tests/<area>_test.rs` naming.
 
-Config loads from `.env` (via `dotenvy`) in the binary and every integration test; `Config::from_env()` fails fast on invalid vars, though every var currently has a default (see `.env.example`) — `DATABASE_URL` defaults to `sqlite://pdf_server.db`, a file created automatically on first run.
+Config loads from `.env` (via `dotenvy`) in the binary and every integration test; `Config::from_env()` fails fast on invalid vars, though every var currently has a default (see `.env.example`) — `DATABASE_URL` defaults to `sqlite://document_server.db`, a file created automatically on first run.
 
 ## Architecture
 
-**Binary/library split**: `src/lib.rs` re-exports `app`, `clients`, `core`, `domain`, `modules` as a library crate; `src/main.rs` is a thin binary. This exists so `tests/*.rs` (a separate crate) can reuse the same modules via `pdf_server::...` — unlike jana2u-pos's backend, there is no `src/bin/` here (no seed scripts needed — the startup disk-sync in `main.rs` keeps `templates` metadata in step with what's on disk).
+**Binary/library split**: `src/lib.rs` re-exports `app`, `clients`, `core`, `domain`, `modules` as a library crate; `src/main.rs` is a thin binary. This exists so `tests/*.rs` (a separate crate) can reuse the same modules via `document_server::...` — unlike jana2u-pos's backend, there is no `src/bin/` here (no seed scripts needed — the startup disk-sync in `main.rs` keeps `templates` metadata in step with what's on disk).
 
 **Request flow**: `main.rs` calls `Config::from_env()` → `clients::sqlite::connect()` (opens/creates the database file, creates the `templates`/`documents` tables if missing) → `clients::render::RenderEngine::warm_up()` (builds the embedded Typst compiler) → `modules::templates::service::sync_templates_from_disk()` (upserts one `templates` row per `.typ` file found) → assembles `AppState { config: Arc<Config>, db: SqlitePool, render: Arc<RenderEngine> }` → `app::build_router(state)`.
 
@@ -97,7 +97,7 @@ No joins are used, and none are expected to be needed: a `documents` row's `temp
 
 ### `clients/sqlite.rs`
 
-`connect(database_url)` builds a `SqlitePoolOptions` pool (`max_connections(5)`) from a `SqliteConnectOptions` with `.create_if_missing(true)` (so a fresh checkout needs no manual `touch pdf_server.db` step) and `.journal_mode(SqliteJournalMode::Wal)` (so a concurrent reader doesn't get "database is locked" against a writer — the pool can and does hand out more than one connection). **Trap to avoid**: don't switch to `sqlite::memory:` for convenience anywhere a pool might open more than one connection — each connection to `:memory:` without shared-cache mode is its own separate empty database, so a second pooled connection silently sees no tables. `tests/openapi_test.rs`'s comment spells this out; both it and `tests/common::spawn_app()` use a throwaway file (`tempfile::NamedTempFile`) instead.
+`connect(database_url)` builds a `SqlitePoolOptions` pool (`max_connections(5)`) from a `SqliteConnectOptions` with `.create_if_missing(true)` (so a fresh checkout needs no manual `touch document_server.db` step) and `.journal_mode(SqliteJournalMode::Wal)` (so a concurrent reader doesn't get "database is locked" against a writer — the pool can and does hand out more than one connection). **Trap to avoid**: don't switch to `sqlite::memory:` for convenience anywhere a pool might open more than one connection — each connection to `:memory:` without shared-cache mode is its own separate empty database, so a second pooled connection silently sees no tables. `tests/openapi_test.rs`'s comment spells this out; both it and `tests/common::spawn_app()` use a throwaway file (`tempfile::NamedTempFile`) instead.
 
 ### `core/` breakdown
 

@@ -4,7 +4,7 @@
 // itself, not endpoint behavior.
 
 use axum::{http::StatusCode, response::IntoResponse};
-use pdf_server::core::{error::AppError, response::ApiResponse};
+use document_server::core::{error::AppError, response::ApiResponse};
 use serde_json::json;
 
 #[tokio::test]
@@ -28,7 +28,7 @@ async fn test_success_response_format() {
     assert_eq!(json["message"], "Template retrieved successfully");
     assert!(
         json.get("processingTimeMs").is_none(),
-        "pdf_server has no timing middleware — processingTimeMs should never appear"
+        "document_server has no timing middleware — processingTimeMs should never appear"
     );
 }
 

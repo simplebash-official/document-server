@@ -5,7 +5,7 @@ use nanoid::nanoid;
 /// `doc_B8nL1q...`). Unlike jana2u-pos's backend, there is no `local_`-prefix
 /// guard here: that assert protects an offline-sync invariant (the frontend
 /// mints provisional `local_`-prefixed keys while offline) that doesn't
-/// exist in this service — pdf_server has no offline-first client and mints
+/// exist in this service — document_server has no offline-first client and mints
 /// every key itself, from exactly two hardcoded prefixes (`tpl`, `doc`),
 /// neither of which can collide with `local_`.
 pub fn generate_id(prefix: &str) -> String {

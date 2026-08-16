@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use axum::Router;
-use pdf_server::{
+use document_server::{
     app, app::AppState, clients, clients::render::RenderEngine, core::config::Config,
     modules::templates,
 };
