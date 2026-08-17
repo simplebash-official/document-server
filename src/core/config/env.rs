@@ -14,14 +14,24 @@ pub struct Config {
     pub templates_dir: String,
     pub fonts_dir: String,
     pub max_render_body_bytes: usize,
+    /// Shared secret every caller must present as `X-Internal-Api-Key` to
+    /// reach the `render`/`documents` routes (see
+    /// `core::middleware::auth::InternalCaller`). Unlike every other field
+    /// on this struct, there is deliberately no default — this service has
+    /// no other access control, so an accidentally-unset secret must fail
+    /// startup, not silently boot wide open.
+    pub internal_api_key: String,
 }
 
 /// Why startup configuration failed to load. `main.rs` logs this and exits
-/// rather than letting the process start half-configured. Every config
-/// value here has a default (see `Config::from_env`), so the only failure
-/// mode currently possible is a value that doesn't parse.
+/// rather than letting the process start half-configured. Every field
+/// except `internal_api_key` has a default (see `Config::from_env`), so
+/// `Missing` only ever fires for that one; `Invalid` covers any value that
+/// doesn't parse.
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
+    #[error("missing required env var {0}")]
+    Missing(&'static str),
     #[error("invalid value for env var {0}")]
     Invalid(&'static str),
 }
@@ -52,12 +62,16 @@ impl Config {
             .parse::<usize>()
             .map_err(|_| ConfigError::Invalid("MAX_RENDER_BODY_BYTES"))?;
 
+        let internal_api_key =
+            env::var("INTERNAL_API_KEY").map_err(|_| ConfigError::Missing("INTERNAL_API_KEY"))?;
+
         Ok(Self {
             database_url,
             port,
             templates_dir,
             fonts_dir,
             max_render_body_bytes,
+            internal_api_key,
         })
     }
 }

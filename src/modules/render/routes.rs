@@ -19,7 +19,8 @@ use utoipa_axum::{router::OpenApiRouter, routes};
 use crate::{
     app::AppState,
     core::{
-        constants::modules, error::AppResult, response::ApiResponse, utils::module_status_response,
+        constants::modules, error::AppResult, middleware::auth::InternalCaller,
+        response::ApiResponse, utils::module_status_response,
     },
     domain::ModuleStatusResponse,
     modules::render::service,
@@ -67,12 +68,15 @@ async fn status() -> Json<ApiResponse<ModuleStatusResponse>> {
     ),
     responses(
         (status = 200, description = "Rendered PDF", content_type = "application/pdf", body = Vec<u8>),
+        (status = 401, description = "Missing or invalid X-Internal-Api-Key header", body = crate::core::response::ErrorResponse),
         (status = 404, description = "Unknown or inactive template", body = crate::core::response::ErrorResponse),
         (status = 422, description = "Request data failed template compilation", body = crate::core::response::ErrorResponse),
         (status = 500, description = "PDF export failed", body = crate::core::response::ErrorResponse),
-    )
+    ),
+    security(("internalApiKey" = []))
 )]
 async fn render_template(
+    _internal: InternalCaller,
     State(state): State<AppState>,
     Path(template_key): Path<String>,
     Json(data): Json<serde_json::Value>,
