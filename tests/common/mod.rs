@@ -27,6 +27,13 @@ pub struct TestApp {
 pub async fn spawn_app() -> TestApp {
     dotenvy::dotenv().ok();
 
+    if std::env::var("INTERNAL_API_KEY").is_err() {
+        // SAFETY: Only invoked at test process startup before multithreaded operations.
+        unsafe {
+            std::env::set_var("INTERNAL_API_KEY", "test-internal-api-key");
+        }
+    }
+
     let mut config = Config::from_env().expect("invalid configuration for test run");
     let db_file = tempfile::NamedTempFile::new().expect("create temp sqlite file");
     config.database_url = format!("sqlite://{}", db_file.path().display());
