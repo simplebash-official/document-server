@@ -12,6 +12,8 @@ env:
 jobs:
   ci:
     runs-on: ubuntu-latest
+    env:
+      INTERNAL_API_KEY: ci-test-internal-api-key
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -65,6 +67,7 @@ jobs:
           FONTS_DIR=fonts
           MAX_RENDER_BODY_BYTES=5242880
           RUST_LOG=document_server=info,tower_http=info,info
+          INTERNAL_API_KEY=${{ secrets.INTERNAL_API_KEY }}
           EOF
 
       - name: Upload binary, .env, and assets to server
