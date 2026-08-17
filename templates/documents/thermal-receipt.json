@@ -1,0 +1,42 @@
+{
+  "paperWidthMm": 80,
+  "invoiceNumber": "INV-000123",
+  "formattedDate": "17 Aug 2026",
+  "formattedTime": "14:32",
+  "cashierName": "Nimal Perera",
+  "customerName": "Kasun Silva",
+  "customerPhone": "077 123 4567",
+  "items": [
+    {
+      "name": "Screen Protector - iPhone 14",
+      "sku": "ACC-SP-014",
+      "quantity": 2,
+      "unitPriceCents": 150000,
+      "discountCents": 0,
+      "totalCents": 300000
+    },
+    {
+      "name": "Screen Replacement",
+      "sourceTicketNumber": "REP-000045",
+      "quantity": 1,
+      "unitPriceCents": 850000,
+      "discountCents": 50000,
+      "totalCents": 800000
+    }
+  ],
+  "subtotalCents": 1100000,
+  "discountCents": 0,
+  "taxCents": 0,
+  "totalCents": 1100000,
+  "paymentMethod": "cash",
+  "tenderedAmountCents": 1200000,
+  "changeDueCents": 100000,
+  "isCredit": false,
+  "warrantyText": "All repairs carry a 30-day warranty on parts and labor.",
+  "footerText": "Thank you for your business!",
+  "shopTradingName": "TechFix Repairs",
+  "shopLegalName": "TechFix Repairs (Pvt) Ltd",
+  "shopAddressLines": ["123 Galle Road", "Colombo 04"],
+  "shopPrimaryPhone": "011 234 5678",
+  "shopSecondaryPhone": ""
+}

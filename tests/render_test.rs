@@ -1,7 +1,8 @@
 // Full-stack: real SQLite (a throwaway per-test file via
 // `common::spawn_app`), real render engine. Exercises the whole render
-// pipeline end to end against the seed `templates/documents/receipt.typ` and
-// `templates/labels/sticker.typ` templates.
+// pipeline end to end against the seed `templates/documents/a4-invoice.typ`,
+// `templates/documents/thermal-receipt.typ`, and `templates/labels/sticker.typ`
+// templates.
 
 mod common;
 
@@ -12,25 +13,34 @@ use tower::ServiceExt;
 
 fn sample_receipt_data() -> serde_json::Value {
     json!({
+        "paperWidthMm": 80,
         "invoiceNumber": "INV-0001",
-        "customerName": "Jane Doe",
+        "formattedDate": "17 Aug 2026",
+        "formattedTime": "14:32",
+        "cashierName": "Jane Doe",
         "items": [
-            {"description": "Widget", "quantity": 2, "unitPrice": 9.99},
-            {"description": "Gadget", "quantity": 1, "unitPrice": 19.99},
+            {"name": "Widget", "quantity": 2, "unitPriceCents": 999, "discountCents": 0, "totalCents": 1998},
+            {"name": "Gadget", "quantity": 1, "unitPriceCents": 1999, "discountCents": 0, "totalCents": 1999},
         ],
-        "total": 39.97,
+        "subtotalCents": 3997,
+        "discountCents": 0,
+        "taxCents": 0,
+        "totalCents": 3997,
+        "paymentMethod": "cash",
+        "tenderedAmountCents": 4000,
+        "changeDueCents": 3,
     })
 }
 
 #[tokio::test]
-async fn render_receipt_returns_pdf_and_records_document() {
+async fn render_thermal_receipt_returns_pdf_and_records_document() {
     let app = common::spawn_app().await;
 
     let template_key: String = sqlx::query_scalar("SELECT key FROM templates WHERE name = ?")
-        .bind("receipt")
+        .bind("thermal-receipt")
         .fetch_one(&app.db)
         .await
-        .expect("receipt template should be synced from disk by spawn_app");
+        .expect("thermal-receipt template should be synced from disk by spawn_app");
 
     let body = sample_receipt_data();
     let response = app
@@ -41,6 +51,7 @@ async fn render_receipt_returns_pdf_and_records_document() {
                 .method("POST")
                 .uri(format!("/api/render/{template_key}"))
                 .header("content-type", "application/json")
+                .header("X-Internal-Api-Key", &app.config.internal_api_key)
                 .body(Body::from(body.to_string()))
                 .unwrap(),
         )
@@ -78,31 +89,123 @@ async fn render_receipt_returns_pdf_and_records_document() {
 }
 
 #[tokio::test]
-async fn render_receipt_with_dynamic_barcode_and_qr_placeholders() {
+async fn render_thermal_receipt_at_58mm_and_80mm_both_succeed() {
     let app = common::spawn_app().await;
 
     let template_key: String = sqlx::query_scalar("SELECT key FROM templates WHERE name = ?")
-        .bind("receipt")
+        .bind("thermal-receipt")
         .fetch_one(&app.db)
         .await
-        .expect("receipt template should be synced from disk by spawn_app");
+        .expect("thermal-receipt template should be synced from disk by spawn_app");
 
-    // Dynamic QR code placeholder in receipt
-    let body_qr = json!({
-        "invoiceNumber": "INV-QR-99",
+    for width in [58, 80] {
+        let mut body = sample_receipt_data();
+        body["paperWidthMm"] = json!(width);
+
+        let response = app
+            .router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(format!("/api/render/{template_key}"))
+                    .header("content-type", "application/json")
+                    .header("X-Internal-Api-Key", &app.config.internal_api_key)
+                    .body(Body::from(body.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK, "paperWidthMm={width}");
+        let pdf_bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert!(pdf_bytes.starts_with(b"%PDF-"));
+    }
+}
+
+#[tokio::test]
+async fn render_without_internal_api_key_header_returns_401() {
+    let app = common::spawn_app().await;
+
+    let template_key: String = sqlx::query_scalar("SELECT key FROM templates WHERE name = ?")
+        .bind("thermal-receipt")
+        .fetch_one(&app.db)
+        .await
+        .expect("thermal-receipt template should be synced from disk by spawn_app");
+
+    let response = app
+        .router
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/render/{template_key}"))
+                .header("content-type", "application/json")
+                .body(Body::from(sample_receipt_data().to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    let json: serde_json::Value = serde_json::from_slice(
+        &axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(json["code"], "INTERNAL_API_KEY_INVALID");
+
+    // Wrong key is rejected the same way as a missing one.
+    let response = app
+        .router
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/render/{template_key}"))
+                .header("content-type", "application/json")
+                .header("X-Internal-Api-Key", "not-the-real-key")
+                .body(Body::from(sample_receipt_data().to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn render_a4_invoice_returns_pdf_and_records_document() {
+    let app = common::spawn_app().await;
+
+    let template_key: String = sqlx::query_scalar("SELECT key FROM templates WHERE name = ?")
+        .bind("a4-invoice")
+        .fetch_one(&app.db)
+        .await
+        .expect("a4-invoice template should be synced from disk by spawn_app");
+
+    let body = json!({
+        "invoiceNumber": "INV-0001",
+        "formattedDate": "17 Aug 2026",
+        "formattedTime": "14:32",
+        "cashierName": "Jane Doe",
+        "status": "paid",
+        "isCredit": false,
         "customerName": "John Doe",
+        "paymentMethod": "cash",
+        "tenderedAmountCents": 4000,
         "items": [
-            {"description": "Grooming Deluxe", "quantity": 1, "unitPrice": 49.99},
+            {"name": "Widget", "quantity": 2, "unitPriceCents": 999, "discountCents": 0, "totalCents": 1998},
         ],
-        "total": 49.99,
-        "footerCode": {
-            "type": "qr",
-            "value": "https://jana2u.com/pay/inv_99",
-            "size": "18mm"
-        }
+        "subtotalCents": 1998,
+        "discountCents": 0,
+        "taxCents": 0,
+        "totalCents": 1998,
+        "amountInWords": "Nineteen Rupees Ninety-Eight Cents Only",
     });
 
-    let response_qr = app
+    let response = app
         .router
         .clone()
         .oneshot(
@@ -110,54 +213,37 @@ async fn render_receipt_with_dynamic_barcode_and_qr_placeholders() {
                 .method("POST")
                 .uri(format!("/api/render/{template_key}"))
                 .header("content-type", "application/json")
-                .body(Body::from(body_qr.to_string()))
+                .header("X-Internal-Api-Key", &app.config.internal_api_key)
+                .body(Body::from(body.to_string()))
                 .unwrap(),
         )
         .await
         .unwrap();
 
-    assert_eq!(response_qr.status(), StatusCode::OK);
-    let pdf_bytes = axum::body::to_bytes(response_qr.into_body(), usize::MAX)
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response
+            .headers()
+            .get("content-type")
+            .and_then(|v| v.to_str().ok()),
+        Some("application/pdf")
+    );
+
+    let pdf_bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
         .await
         .unwrap();
-    assert!(pdf_bytes.starts_with(b"%PDF-"));
+    assert!(
+        pdf_bytes.starts_with(b"%PDF-"),
+        "response body does not start with the PDF magic bytes"
+    );
 
-    // Dynamic barcode placeholder in receipt
-    let body_barcode = json!({
-        "invoiceNumber": "INV-BC-101",
-        "customerName": "Alice Smith",
-        "items": [
-            {"description": "Nail Trim", "quantity": 1, "unitPrice": 15.00},
-        ],
-        "total": 15.00,
-        "footerCode": {
-            "type": "barcode",
-            "value": "INV-BC-101",
-            "symbology": "Code128",
-            "height": "10mm",
-            "showText": true
-        }
-    });
-
-    let response_bc = app
-        .router
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri(format!("/api/render/{template_key}"))
-                .header("content-type", "application/json")
-                .body(Body::from(body_barcode.to_string()))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(response_bc.status(), StatusCode::OK);
-    let pdf_bytes_bc = axum::body::to_bytes(response_bc.into_body(), usize::MAX)
-        .await
-        .unwrap();
-    assert!(pdf_bytes_bc.starts_with(b"%PDF-"));
+    let file_size_bytes: i64 =
+        sqlx::query_scalar("SELECT file_size_bytes FROM documents WHERE template_key = ?")
+            .bind(&template_key)
+            .fetch_one(&app.db)
+            .await
+            .expect("render_template should have recorded a documents entry");
+    assert_eq!(file_size_bytes, pdf_bytes.len() as i64);
 }
 
 #[tokio::test]
@@ -182,6 +268,7 @@ async fn render_sticker_returns_pdf_and_records_document() {
                 .method("POST")
                 .uri(format!("/api/render/{template_key}"))
                 .header("content-type", "application/json")
+                .header("X-Internal-Api-Key", &app.config.internal_api_key)
                 .body(Body::from(body.to_string()))
                 .unwrap(),
         )
@@ -225,6 +312,7 @@ async fn render_unknown_template_returns_404() {
                 .method("POST")
                 .uri("/api/render/tpl_does_not_exist")
                 .header("content-type", "application/json")
+                .header("X-Internal-Api-Key", &app.config.internal_api_key)
                 .body(Body::from(sample_receipt_data().to_string()))
                 .unwrap(),
         )
@@ -260,6 +348,7 @@ async fn render_sticker_with_missing_field_returns_422() {
                 .method("POST")
                 .uri(format!("/api/render/{template_key}"))
                 .header("content-type", "application/json")
+                .header("X-Internal-Api-Key", &app.config.internal_api_key)
                 .body(Body::from(json!({}).to_string()))
                 .unwrap(),
         )

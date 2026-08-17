@@ -19,6 +19,7 @@ use crate::{
     core::{
         constants::modules,
         error::AppResult,
+        middleware::auth::InternalCaller,
         response::{ApiResponse, ErrorResponse},
     },
     domain::documents::{Document, DocumentsResponse},
@@ -41,9 +42,11 @@ pub fn router() -> OpenApiRouter<AppState> {
 // ============================================================================
 
 #[utoipa::path(get, path = "/", tag = modules::DOCUMENTS, responses(
-    (status = 200, description = "List rendered documents, newest first", body = ApiResponse<DocumentsResponse>)
-))]
+    (status = 200, description = "List rendered documents, newest first", body = ApiResponse<DocumentsResponse>),
+    (status = 401, description = "Missing or invalid X-Internal-Api-Key header", body = ErrorResponse),
+), security(("internalApiKey" = [])))]
 async fn list_documents(
+    _internal: InternalCaller,
     State(state): State<AppState>,
 ) -> AppResult<Json<ApiResponse<DocumentsResponse>>> {
     let response = service::list_documents(&state.db).await?;
@@ -58,10 +61,13 @@ async fn list_documents(
     params(("key" = String, Path, description = "The document's key (doc_...)")),
     responses(
         (status = 200, description = "Get a document record", body = ApiResponse<Document>),
+        (status = 401, description = "Missing or invalid X-Internal-Api-Key header", body = ErrorResponse),
         (status = 404, description = "Document not found", body = ErrorResponse),
-    )
+    ),
+    security(("internalApiKey" = []))
 )]
 async fn get_document(
+    _internal: InternalCaller,
     State(state): State<AppState>,
     Path(key): Path<String>,
 ) -> AppResult<Json<ApiResponse<Document>>> {
@@ -81,12 +87,15 @@ async fn get_document(
     params(("key" = String, Path, description = "The document's key (doc_...)")),
     responses(
         (status = 200, description = "Reprinted PDF", content_type = "application/pdf", body = Vec<u8>),
+        (status = 401, description = "Missing or invalid X-Internal-Api-Key header", body = ErrorResponse),
         (status = 404, description = "Document not found, or its template row no longer exists", body = ErrorResponse),
         (status = 422, description = "Stored data no longer satisfies the current template", body = ErrorResponse),
         (status = 500, description = "PDF export failed", body = ErrorResponse),
-    )
+    ),
+    security(("internalApiKey" = []))
 )]
 async fn reprint_document(
+    _internal: InternalCaller,
     State(state): State<AppState>,
     Path(key): Path<String>,
 ) -> AppResult<Response> {

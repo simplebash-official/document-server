@@ -37,15 +37,27 @@ async fn list_templates_returns_every_seeded_template_with_type_and_expected_dat
         .iter()
         .map(|t| t["name"].as_str().unwrap())
         .collect();
-    assert_eq!(names, vec!["receipt", "sticker"]);
+    assert_eq!(names, vec!["a4-invoice", "sticker", "thermal-receipt"]);
     assert!(templates.iter().all(|t| t["isActive"] == true));
 
-    let receipt_tpl = templates.iter().find(|t| t["name"] == "receipt").unwrap();
+    let invoice_tpl = templates
+        .iter()
+        .find(|t| t["name"] == "a4-invoice")
+        .unwrap();
+    assert_eq!(invoice_tpl["type"], "document");
+    assert_eq!(invoice_tpl["data"]["invoiceNumber"], "INV-000123");
+    assert!(invoice_tpl["data"]["items"].is_array());
+    assert_eq!(invoice_tpl["data"]["totalCents"], 1100000);
+
+    let receipt_tpl = templates
+        .iter()
+        .find(|t| t["name"] == "thermal-receipt")
+        .unwrap();
     assert_eq!(receipt_tpl["type"], "document");
-    assert_eq!(receipt_tpl["data"]["invoiceNumber"], "PPmay056");
+    assert_eq!(receipt_tpl["data"]["invoiceNumber"], "INV-000123");
     assert!(receipt_tpl["data"]["items"].is_array());
-    assert_eq!(receipt_tpl["data"]["total"], 157.08);
-    assert_eq!(receipt_tpl["data"]["footerCode"]["type"], "barcode");
+    assert_eq!(receipt_tpl["data"]["totalCents"], 1100000);
+    assert_eq!(receipt_tpl["data"]["paperWidthMm"], 80);
 
     let sticker_tpl = templates.iter().find(|t| t["name"] == "sticker").unwrap();
     assert_eq!(sticker_tpl["type"], "label");
@@ -79,10 +91,13 @@ async fn list_templates_filters_by_type() {
     .unwrap();
 
     let templates = json["data"]["templates"].as_array().unwrap();
-    assert_eq!(templates.len(), 1);
-    assert_eq!(templates[0]["name"], "receipt");
-    assert_eq!(templates[0]["type"], "document");
-    assert_eq!(templates[0]["data"]["invoiceNumber"], "PPmay056");
+    assert_eq!(templates.len(), 2);
+    let names: Vec<&str> = templates
+        .iter()
+        .map(|t| t["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(names, vec!["a4-invoice", "thermal-receipt"]);
+    assert!(templates.iter().all(|t| t["type"] == "document"));
 
     // Filter by type=label
     let response = app

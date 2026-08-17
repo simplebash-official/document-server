@@ -29,6 +29,7 @@ async fn render_a_sticker(app: &common::TestApp) -> String {
                 .method("POST")
                 .uri(format!("/api/render/{template_key}"))
                 .header("content-type", "application/json")
+                .header("X-Internal-Api-Key", &app.config.internal_api_key)
                 .body(Body::from(body.to_string()))
                 .unwrap(),
         )
@@ -53,6 +54,7 @@ async fn list_documents_returns_every_recorded_document() {
         .oneshot(
             Request::builder()
                 .uri("/api/documents")
+                .header("X-Internal-Api-Key", &app.config.internal_api_key)
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -83,6 +85,7 @@ async fn get_document_by_key_returns_that_document() {
         .oneshot(
             Request::builder()
                 .uri(format!("/api/documents/{key}"))
+                .header("X-Internal-Api-Key", &app.config.internal_api_key)
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -110,6 +113,7 @@ async fn get_document_unknown_key_returns_404() {
         .oneshot(
             Request::builder()
                 .uri("/api/documents/doc_does_not_exist")
+                .header("X-Internal-Api-Key", &app.config.internal_api_key)
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -136,6 +140,7 @@ async fn reprint_document_returns_pdf() {
         .oneshot(
             Request::builder()
                 .uri(format!("/api/documents/{key}/pdf"))
+                .header("X-Internal-Api-Key", &app.config.internal_api_key)
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -169,6 +174,7 @@ async fn reprint_unknown_document_returns_404() {
         .oneshot(
             Request::builder()
                 .uri("/api/documents/doc_does_not_exist/pdf")
+                .header("X-Internal-Api-Key", &app.config.internal_api_key)
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -183,4 +189,24 @@ async fn reprint_unknown_document_returns_404() {
     )
     .unwrap();
     assert_eq!(json["code"], "DOCUMENT_NOT_FOUND");
+}
+
+#[tokio::test]
+async fn documents_routes_without_internal_api_key_header_return_401() {
+    let app = common::spawn_app().await;
+    let key = render_a_sticker(&app).await;
+
+    for uri in [
+        "/api/documents".to_string(),
+        format!("/api/documents/{key}"),
+        format!("/api/documents/{key}/pdf"),
+    ] {
+        let response = app
+            .router
+            .clone()
+            .oneshot(Request::builder().uri(&uri).body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED, "uri={uri}");
+    }
 }

@@ -244,33 +244,79 @@ mod tests {
     use super::*;
 
     #[test]
-    fn warm_up_and_compile_receipt_produces_a_pdf() {
+    fn warm_up_and_compile_thermal_receipt_produces_a_pdf() {
         let engine = RenderEngine::warm_up("templates", "fonts").expect("warm_up should succeed");
         assert!(
             engine
                 .known_templates()
                 .iter()
-                .any(|t| t.name == "receipt" && t.template_type == TemplateType::Document)
+                .any(|t| t.name == "thermal-receipt" && t.template_type == TemplateType::Document)
         );
 
         let mut items = Vec::new();
         let mut item = Dict::new();
-        item.insert(Str::from("description"), "Widget".into_value());
+        item.insert(Str::from("name"), "Widget".into_value());
         item.insert(Str::from("quantity"), Value::Int(2));
-        item.insert(Str::from("unitPrice"), Value::Float(9.99));
+        item.insert(Str::from("unitPriceCents"), Value::Int(999));
+        item.insert(Str::from("discountCents"), Value::Int(0));
+        item.insert(Str::from("totalCents"), Value::Int(1998));
         items.push(Value::Dict(item));
 
         let mut input = Dict::new();
+        input.insert(Str::from("paperWidthMm"), Value::Int(80));
         input.insert(Str::from("invoiceNumber"), "INV-0001".into_value());
-        input.insert(Str::from("customerName"), "Jane Doe".into_value());
+        input.insert(Str::from("cashierName"), "Jane Doe".into_value());
         input.insert(
             Str::from("items"),
             Value::Array(items.into_iter().collect()),
         );
-        input.insert(Str::from("total"), Value::Float(19.98));
+        input.insert(Str::from("subtotalCents"), Value::Int(1998));
+        input.insert(Str::from("totalCents"), Value::Int(1998));
+        input.insert(Str::from("paymentMethod"), "cash".into_value());
+        input.insert(Str::from("tenderedAmountCents"), Value::Int(2000));
+        input.insert(Str::from("changeDueCents"), Value::Int(2));
 
-        let warned = engine.compile("receipt", input);
-        let doc = warned.output.expect("receipt.typ should compile");
+        let warned = engine.compile("thermal-receipt", input);
+        let doc = warned.output.expect("thermal-receipt.typ should compile");
+
+        let pdf_bytes =
+            typst_pdf::pdf(&doc, &Default::default()).expect("pdf export should succeed");
+        assert!(pdf_bytes.starts_with(b"%PDF-"));
+    }
+
+    #[test]
+    fn warm_up_and_compile_a4_invoice_produces_a_pdf() {
+        let engine = RenderEngine::warm_up("templates", "fonts").expect("warm_up should succeed");
+        assert!(
+            engine
+                .known_templates()
+                .iter()
+                .any(|t| t.name == "a4-invoice" && t.template_type == TemplateType::Document)
+        );
+
+        let mut items = Vec::new();
+        let mut item = Dict::new();
+        item.insert(Str::from("name"), "Widget".into_value());
+        item.insert(Str::from("quantity"), Value::Int(2));
+        item.insert(Str::from("unitPriceCents"), Value::Int(999));
+        item.insert(Str::from("discountCents"), Value::Int(0));
+        item.insert(Str::from("totalCents"), Value::Int(1998));
+        items.push(Value::Dict(item));
+
+        let mut input = Dict::new();
+        input.insert(Str::from("invoiceNumber"), "INV-0001".into_value());
+        input.insert(Str::from("cashierName"), "Jane Doe".into_value());
+        input.insert(Str::from("status"), "paid".into_value());
+        input.insert(
+            Str::from("items"),
+            Value::Array(items.into_iter().collect()),
+        );
+        input.insert(Str::from("subtotalCents"), Value::Int(1998));
+        input.insert(Str::from("totalCents"), Value::Int(1998));
+        input.insert(Str::from("paymentMethod"), "cash".into_value());
+
+        let warned = engine.compile("a4-invoice", input);
+        let doc = warned.output.expect("a4-invoice.typ should compile");
 
         let pdf_bytes =
             typst_pdf::pdf(&doc, &Default::default()).expect("pdf export should succeed");

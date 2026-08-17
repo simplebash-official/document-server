@@ -7,18 +7,18 @@ use axum::{
 use crate::core::response::ErrorResponse;
 
 /// The single error type every handler's `AppResult<T>` returns through.
-/// Three named variants (`NotFound`, `Validation`, `Internal`) cover the
-/// common HTTP statuses and default to a generic error `code` (see
+/// Four named variants (`NotFound`, `Validation`, `Internal`, `Unauthorized`)
+/// cover the common HTTP statuses and default to a generic error `code` (see
 /// `status_code_code_and_message`) when none is given via the `*_with_code`
 /// constructors; `Custom` exists as an escape hatch for statuses/codes that
-/// don't fit those three (e.g. 422 Unprocessable Entity, used by
-/// `modules::render` for a Typst compile failure — see
-/// `unprocessable_entity`). Trimmed from jana2u-pos's backend `AppError`:
-/// `Unauthorized`/`Forbidden` are dropped, since nothing in this service
-/// ever constructs them — there is no authentication layer at all.
-/// Implements `IntoResponse` directly, so `?`-propagating one of these from
-/// a handler is enough to produce the right HTTP response — no separate
-/// mapping step.
+/// don't fit those (e.g. 422 Unprocessable Entity, used by `modules::render`
+/// for a Typst compile failure — see `unprocessable_entity`). `Forbidden` is
+/// still dropped, since nothing in this service constructs it — there is no
+/// per-caller permission concept, only the single internal-caller secret
+/// checked by `core::middleware::auth::InternalCaller`, which is what
+/// constructs `Unauthorized`. Implements `IntoResponse` directly, so
+/// `?`-propagating one of these from a handler is enough to produce the
+/// right HTTP response — no separate mapping step.
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {
     #[error("{message}")]
@@ -35,6 +35,12 @@ pub enum AppError {
 
     #[error("{message}")]
     Internal {
+        message: String,
+        code: Option<String>,
+    },
+
+    #[error("{message}")]
+    Unauthorized {
         message: String,
         code: Option<String>,
     },
@@ -92,6 +98,20 @@ impl AppError {
 
     pub fn internal_with_code(message: impl Into<String>, code: impl Into<String>) -> Self {
         AppError::Internal {
+            message: message.into(),
+            code: Some(code.into()),
+        }
+    }
+
+    pub fn unauthorized(message: impl Into<String>) -> Self {
+        AppError::Unauthorized {
+            message: message.into(),
+            code: None,
+        }
+    }
+
+    pub fn unauthorized_with_code(message: impl Into<String>, code: impl Into<String>) -> Self {
+        AppError::Unauthorized {
             message: message.into(),
             code: Some(code.into()),
         }
@@ -159,6 +179,13 @@ impl AppError {
                 code.clone().unwrap_or_else(|| {
                     crate::core::constants::codes::INTERNAL_SERVER_ERROR.to_string()
                 }),
+                message.clone(),
+                None,
+            ),
+            AppError::Unauthorized { message, code } => (
+                StatusCode::UNAUTHORIZED,
+                code.clone()
+                    .unwrap_or_else(|| crate::core::constants::codes::UNAUTHORIZED.to_string()),
                 message.clone(),
                 None,
             ),
