@@ -122,3 +122,13 @@ Same rules as jana2u-pos, applied whenever a file is touched:
 - **Phase 2 — Second template + barcode/QR** (done): `templates/sticker.typ` (print-size, 50mm×30mm) using the vendored `tiaoma`/`zebra` packages for a Code128 barcode and a QR code (`templates/lib/`); `templates`'s real read routes (`GET /`, `GET /{key}`); `tests/templates_test.rs` and the sticker cases in `render_test.rs`/`clients::render`'s unit tests.
 - **Phase 3 — Documents as first-class resources** (done): `documents`'s real read routes (`GET /`, `GET /{key}`), `GET /api/documents/{key}/pdf` reprint endpoint (`render::service::compile_pdf` extracted so it and `render_template` share the same compile-error mapping), `tests/documents_test.rs`.
 - **Phase 4 — not started**: format negotiation (PNG/SVG), template hot-reload without a restart (see the file-resolver caching trap under "The render pipeline & `RenderEngine`" — this is the concrete gap that phase would close), render result caching keyed on `(template_key, data)`.
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+Rules:
+- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
