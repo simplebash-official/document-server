@@ -1,6 +1,6 @@
-# GEMINI.md
+# CLAUDE.md
 
-This file provides guidance to AI coding assistants when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project
 
@@ -11,7 +11,7 @@ This codebase follows jana2u-pos's backend conventions (`core/error.rs`, `core/r
 ## Commands
 
 - `cargo build` / `cargo run` (equivalent to `cargo run --bin document_server`)
-- `cargo test` — every test needs no external service: all integration tests open their own throwaway SQLite file per test (see `tests/common::spawn_app()`), and `clients::render::tests::warm_up_and_compile_receipt_produces_a_pdf` (a `#[cfg(test)]` unit test in `src/clients/render.rs`) needs no database at all — it exercises the real Typst compiler against the real `templates/`/`fonts/` directories.
+- `cargo test` — every test needs no external service: `tests/render_test.rs` opens its own throwaway SQLite file per test (see `tests/common::spawn_app()`), and `clients::render::tests::warm_up_and_compile_receipt_produces_a_pdf` (a `#[cfg(test)]` unit test in `src/clients/render.rs`) needs no database at all — it exercises the real Typst compiler against the real `templates/`/`fonts/` directories.
 - `cargo fmt` / `cargo fmt --check`
 - `make check` — `cargo fmt --check` → `cargo clippy --all-targets --all-features -- -D warnings` → `cargo test`, stopping at the first failure. Run this after every change.
 
@@ -31,13 +31,11 @@ Unlike jana2u-pos's backend (where auth is opt-in per handler via `CurrentUser`/
 
 ### Feature modules (`src/modules/<name>/`)
 
-Five modules, each layered `routes.rs` → `service` → `repository` (repository = SQLite/Typst only, no `AppError`, just `Option`/`Vec`/`Result` straight from the driver/compiler — the "not found"/"compile failed" → `AppError` translation happens one layer up, in `service`):
+Three modules, each layered `routes.rs` → `service` → `repository` (repository = SQLite/Typst only, no `AppError`, just `Option`/`Vec`/`Result` straight from the driver/compiler — the "not found"/"compile failed" → `AppError` translation happens one layer up, in `service`):
 
 - **`render`** — the render endpoint itself (`POST /api/render/{templateKey}`). `repository/typst.rs` owns the JSON→Typst `Dict` bridge (`json_to_dict`, hand-written — `typst-as-lib` has no built-in `serde_json` integration) and the compile/export orchestration; `service` resolves the template, compiles via `compile_pdf`, and records a `documents` entry. `repository` is private; `service` is `pub(crate)` (see "Documents as first-class resources" below for who calls in) — `routes` is the only entry point reachable from outside the crate.
-- **`templates`** — template metadata. `GET /` lists every template (active and inactive, with support for `?type=document|label` query filter), `GET /{key}` fetches one. Categorizes templates into `document` and `label` based on directory locations (`templates/documents/` vs `templates/labels/`).
-- **`documents`** — records of rendered documents. `GET /` lists every document (newest first), `GET /{key}` fetches one, `GET /{key}/pdf` reprints.
-- **`barcodes`** — standalone 1D barcode generation service. `POST /api/barcodes/generate` (returns JSON response with SVG markup) and `GET /api/barcodes/generate` (streams `image/svg+xml` directly). Supports Code128, Code39, EAN13, EAN8.
-- **`qrcodes`** — standalone 2D QR code generation service. `POST /api/qrcodes/generate` (returns JSON response with SVG markup) and `GET /api/qrcodes/generate` (streams `image/svg+xml` directly). Supports configurable error correction levels (L, M, Q, H).
+- **`templates`** — template metadata. **Real as of Phase 2**: `GET /` lists every template (active and inactive), `GET /{key}` fetches one. Unlike `render`/`documents`, there's no module-status stub — the collection root is itself the real "list" endpoint, so there's no unused path left for one (same convention jana2u-pos's `suppliers` module uses).
+- **`documents`** — records of rendered documents. **Real as of Phase 3**: `GET /` lists every document (newest first), `GET /{key}` fetches one, `GET /{key}/pdf` reprints. Same no-module-status-stub convention as `templates`.
 
 **Cross-module access**: `render::service::render_template` calls `templates::service::get_active_template_by_key` and `documents::service::record_document`; `documents::service::reprint_document` calls back the other way, into `templates::service::get_template_by_key` and `render::service::compile_pdf` — every one of these reached through the sibling module's `service`, never its `repository` (same rule as jana2u-pos). This is a genuine two-way dependency between `render` and `documents` (each calls into the other's `service`), which is fine in Rust — it's just fully-qualified function calls, not a `use`-cycle problem. `templates::service` is `pub` (not `pub(crate)`) specifically because `main.rs`'s startup sync needs `sync_templates_from_disk` directly, and a `pub(crate)` item in this library crate is invisible to `main.rs` (a separate binary crate). `render::service` and `documents::service` are both `pub(crate)` — sibling-module-only, never reachable from `main.rs` or outside the crate.
 
@@ -45,24 +43,17 @@ Five modules, each layered `routes.rs` → `service` → `repository` (repositor
 
 ### The render pipeline & `RenderEngine`
 
-`clients::render::RenderEngine` (parallel to `clients::sqlite` — a resource connected/built once at startup and shared read-only via `AppState`) owns the Typst engine's *lifecycle*: `warm_up()` reads every font under `FONTS_DIR` into memory (a genuine preload — `.fonts()` takes owned bytes) and points the engine at `TEMPLATES_DIR` via `with_file_system_resolver` (which resolves `.typ` files, and any assets they reference, from disk by relative path).
-
-Templates are organized into category subdirectories:
-- `templates/documents/` (e.g., `receipt.typ` for full-page or receipt documents).
-- `templates/labels/` (e.g., `sticker.typ` for thermal barcode/QR labels).
-- `templates/lib/` (shared Typst components: `barcode.typ`, `qrcode.typ`, and `codes.typ` which provides the `#code-placeholder` component).
-
-Document templates leave placeholder space for dynamic barcodes or QR codes using `#code-placeholder(data.at("footerCode", default: none))` from `templates/lib/codes.typ`. At compile time, any document template can dynamically render either a barcode or a QR code depending on the request JSON payload.
-
-**Trap to know about**: `typst-as-lib` wraps that resolver in its own `.into_cached()`, so a file is only ever actually read from disk once per process lifetime — a `.typ` file edited on disk while the server keeps running is *not* picked up until a restart rebuilds the engine (see `documents::service::reprint_document`'s doc comment, and "Reprint reflects the template as of last boot, not live edits" below). It then runs one best-effort trial compile per known template (empty input) purely to catch outright breakage (bad syntax, a missing asset, a bad font family) before the first real request — a trial failing because the template legitimately needs real input data is the common case (true for *every* template that actually takes input) and is logged at `debug`, not `warn`, so it doesn't look like a startup problem on every run.
+`clients::render::RenderEngine` (parallel to `clients::sqlite` — a resource connected/built once at startup and shared read-only via `AppState`) owns the Typst engine's *lifecycle*: `warm_up()` reads every font under `FONTS_DIR` into memory (a genuine preload — `.fonts()` takes owned bytes) and points the engine at `TEMPLATES_DIR` via `with_file_system_resolver` (which resolves `.typ` files, and any assets they reference, from disk by relative path). **Trap to know about**: `typst-as-lib` wraps that resolver in its own `.into_cached()`, so a file is only ever actually read from disk once per process lifetime — a `.typ` file edited on disk while the server keeps running is *not* picked up until a restart rebuilds the engine (see `documents::service::reprint_document`'s doc comment, and "Reprint reflects the template as of last boot, not live edits" below). It then runs one best-effort trial compile per known template (empty input) purely to catch outright breakage (bad syntax, a missing asset, a bad font family) before the first real request — a trial failing because the template legitimately needs real input data is the common case (true for *every* template that actually takes input) and is logged at `debug`, not `warn`, so it doesn't look like a startup problem on every run.
 
 Per-request orchestration (JSON → `Dict`, compile, export, error translation) is **not** in `clients::render` — it lives in `modules::render::repository::typst`, since that's request-scoped business logic, not resource lifecycle. `TypstEngineError::Compile` → `AppError::unprocessable_entity(codes::RENDER_VALIDATION_FAILED, ..)` (422); `TypstEngineError::Export` → `AppError::internal_with_code(.., codes::PDF_EXPORT_FAILED)` (500).
 
-Templates stay file-based on disk (`templates/**/*.typ`); each template can have an adjacent `.json` file (e.g. `templates/documents/receipt.json`, `templates/labels/sticker.json`) specifying the expected input data contract. The `templates` table stores queryable *metadata about* each file (name, description, `type`, `data`, `is_active`). When clients list or fetch templates, each template object includes its expected payload structure under the `data` sub-object. `documents` rows store the request's `data`, not the rendered PDF bytes, so a reprint recompiles rather than replaying cached bytes — see "Documents as first-class resources" below for exactly what "recompiles" is (and isn't) a guarantee of.
+Templates stay file-based on disk (`templates/*.typ`); the `templates` table is queryable *metadata about* each file (name, description, `data_schema`, `is_active`), never a second source of truth for rendering — the `.typ` file's own header comment documents its JSON contract. `documents` rows store the request's `data`, not the rendered PDF bytes, so a reprint recompiles rather than replaying cached bytes — see "Documents as first-class resources" below for exactly what "recompiles" is (and isn't) a guarantee of.
 
-### Documents as first-class resources
+See `templates/CLAUDE.md` for barcode/QR (`templates/lib/`) conventions.
 
-`GET /api/documents` (list, newest first), `GET /api/documents/{key}` (one record), and `GET /api/documents/{key}/pdf` (reprint) are real.
+### Documents as first-class resources (Phase 3)
+
+`GET /api/documents` (list, newest first), `GET /api/documents/{key}` (one record), and `GET /api/documents/{key}/pdf` (reprint) are real as of Phase 3 — `documents` drops its module-status stub the same way `templates` did in Phase 2 (see "Feature modules" above).
 
 `documents::service::reprint_document` recompiles the stored `data` against the template rather than replaying cached PDF bytes (none are stored — see spec §6.2) — the point being that a template fix benefits every historical document's reprint, not just future renders. It looks the template up via `templates::service::get_template_by_key`, **not** `render::service::render_template`'s `_active_` variant: deactivating a template stops *future* renders, it doesn't retroactively make history unreprintable.
 
@@ -72,18 +63,15 @@ Templates stay file-based on disk (`templates/**/*.typ`); each template can have
 
 ### Response & error envelope — the one deliberate deviation
 
-`AppError` (`core/error.rs`) is trimmed from jana2u-pos's six variants to four: `NotFound`, `Validation`, `Internal`, `Custom` — `Unauthorized`/`Forbidden` are dropped since nothing ever constructs them (no auth). `AppError::Validation` keeps its normal jana2u-pos-inherited 400 mapping (used for invalid input payloads, e.g. empty barcode content or invalid symbology). The one render-specific need for 422 (a Typst compile failure) uses `AppError::unprocessable_entity(code, message)` — also ported from jana2u-pos — rather than repurposing `Validation`'s status mapping. See `tests/response_format_test.rs::test_unprocessable_entity_is_422` for the regression guard.
+`AppError` (`core/error.rs`) is trimmed from jana2u-pos's six variants to four: `NotFound`, `Validation`, `Internal`, `Custom` — `Unauthorized`/`Forbidden` are dropped since nothing ever constructs them (no auth). `AppError::Validation` keeps its normal jana2u-pos-inherited 400 mapping (currently unused, available for a future genuine bad-request case). The one render-specific need for 422 (a Typst compile failure) uses `AppError::unprocessable_entity(code, message)` — also ported from jana2u-pos — rather than repurposing `Validation`'s status mapping. See `tests/response_format_test.rs::test_unprocessable_entity_is_422` for the regression guard.
 
 `ApiResponse<T>`/`ErrorResponse` are otherwise identical to jana2u-pos's shapes (`{success, data, message}` / `{success, message, code, statusCode}`, camelCase) with one omission: there is no `processingTimeMs` splice, since jana2u-pos's comes from a `core::middleware::timing` layer that doesn't exist here.
 
-**The render and SVG streaming endpoints are the places where raw responses apply**:
-- `POST /api/render/{templateKey}` and `GET /api/documents/{key}/pdf` return raw PDF bytes with `Content-Type: application/pdf`.
-- `GET /api/barcodes/generate` and `GET /api/qrcodes/generate` return raw SVG bytes with `Content-Type: image/svg+xml`.
-- Their JSON counterparts (`POST /api/barcodes/generate`, `POST /api/qrcodes/generate`, `GET /api/templates`, `GET /api/documents`) follow the standard `ApiResponse<T>` wrapper.
+**The render endpoint's success response is the one place the envelope itself doesn't apply** (see spec's design rationale, also documented inline in `modules/render/routes.rs`): `POST /api/render/{templateKey}` returns raw PDF bytes with `Content-Type: application/pdf` on success — not `Json<ApiResponse<_>>` — because JSON-wrapping a binary payload would mean base64-inflating it. Its *errors* still go through the standard `AppError`/`ErrorResponse` path; only the success shape differs. Its `#[utoipa::path]` documents this via `content_type = "application/pdf"` on the 200 response.
 
 ### Custom Prefixed Unique Model Keys
 
-Every row across both tables (`templates`, `documents`) gets a `key: String` in `<prefix>_<nanoid>` form via `core::id::generate_id(prefix)` (`core::constants::prefixes::{TEMPLATE, DOCUMENT}` = `tpl`/`doc`), which is also the table's primary key — there's no separate autoincrement row id. `key` is the only external identifier — path params, request bodies, and response payloads all use it.
+Every row across both tables (`templates`, `documents`) gets a `key: String` in `<prefix>_<nanoid>` form via `core::id::generate_id(prefix)` (`core::constants::prefixes::{TEMPLATE, DOCUMENT}` = `tpl`/`doc`), which is also the table's primary key — there's no separate autoincrement row id. `key` is the only external identifier — path params, request bodies, and response payloads all use it. Unlike jana2u-pos's `generate_id`, there is no `local_`-prefix guard here — that assert protects an offline-sync invariant (the frontend mints provisional `local_`-prefixed keys while offline) that doesn't apply: this service has no offline-first client and only ever mints keys from its two hardcoded prefixes.
 
 ### Timestamps
 
@@ -101,24 +89,24 @@ No joins are used, and none are expected to be needed: a `documents` row's `temp
 
 ### `core/` breakdown
 
-`config` (env-var loading, fail-fast on invalid — nothing is currently required, everything defaults), `constants` (`codes`, `modules`, `prefixes` — no `permissions`/`roles`/`http_status`, unused without auth), `error` (`AppError`/`AppResult`), `id` (`generate_id`), `openapi` (`ApiDoc` — no `SecurityAddon`, no `bearerAuth` scheme), `response` (`ApiResponse<T>`/`ErrorResponse`), `utils` (`module_status_response` only).
+`config` (env-var loading, fail-fast on invalid — nothing is currently required, everything defaults), `constants` (`codes`, `modules`, `prefixes` — no `permissions`/`roles`/`http_status`, unused without auth), `error` (`AppError`/`AppResult`), `id` (`generate_id`), `openapi` (`ApiDoc` — no `SecurityAddon`, no `bearerAuth` scheme), `response` (`ApiResponse<T>`/`ErrorResponse`), `utils` (`module_status_response` only — no `parse_object_id` equivalent, since no route here ever takes a database-assigned id from a path param, only `key` strings; no `regex_escape`/`calculate_pagination`, unused until Phase 2's search/pagination needs arise).
 
 ## API docs (OpenAPI/Swagger)
 
-Same `utoipa`/`utoipa-axum`/`utoipa-swagger-ui` setup as jana2u-pos — Swagger at `/docs`, raw spec at `/api-docs/openapi.json`. Every handler must be registered via `routes!(...)` inside a module's `router()` — never plain `axum::routing::get/post` — since only `routes!()`-registered handlers get collected into the spec.
+Same `utoipa`/`utoipa-axum`/`utoipa-swagger-ui` setup as jana2u-pos — Swagger at `/docs`, raw spec at `/api-docs/openapi.json`. Every handler must be registered via `routes!(...)` inside a module's `router()` — never plain `axum::routing::get/post` — since only `routes!()`-registered handlers get collected into the spec. **Exception to watch for**: `POST /api/render/{templateKey}`'s `#[utoipa::path]` declares its 200 response as `content_type = "application/pdf", body = Vec<u8>` instead of the usual `ApiResponse<T>` schema — this is deliberate (see above), do not "fix" it to look like every other handler.
+
+See `postman/CLAUDE.md` for the Postman collection conventions.
 
 ## Testing
 
-Seven integration test files + unit tests, no external service needed for any of them:
+Five tiers, no external service needed for any of them (a deliberate improvement over jana2u-pos's Mongo-backed test suite — no database process to start before running `cargo test`):
 
-- `tests/render_test.rs` — full-stack rendering against SQLite + Typst. Tests `receipt` and `sticker` rendering, dynamic barcode and QR placeholders, and 422 error on missing required fields.
-- `tests/templates_test.rs` — template listing, type metadata (`document` vs `label`), and `?type=document|label` filtering.
-- `tests/documents_test.rs` — document listing, fetching by key, reprint endpoint (`/api/documents/{key}/pdf`).
-- `tests/barcodes_test.rs` — POST and GET barcode endpoints, symbologies, and validation errors.
-- `tests/qrcodes_test.rs` — POST and GET QR code endpoints, ECC levels, and validation errors.
-- `tests/openapi_test.rs` — OpenAPI spec correctness and Swagger mounting.
-- `tests/response_format_test.rs` — standard `ApiResponse` and `AppError` formatting.
-- `src/clients/render.rs` & `src/modules/barcodes/service/mod.rs` unit tests — compiler and symbology encoding unit tests.
+- `tests/render_test.rs` — full-stack, against a real throwaway SQLite file per test (`tests/common::spawn_app()`, which also does a real `RenderEngine::warm_up()` and disk-sync). Exercises the whole pipeline against both seed templates: `receipt` (successful render → PDF magic bytes + matching `documents` row) and `sticker` (successful render, including the vendored barcode/QR packages, end to end through HTTP; also the one with a required-field contract, so it's `sticker`, not `receipt`, that backs the missing-field → 422 case — `receipt.typ` is a fully static design that never reads `sys.inputs`, so it has no input to fail on). Plus unknown template → 404.
+- `tests/templates_test.rs` — same full-stack style, scoped to `templates` as a resource: `GET /api/templates` lists both seed templates, `GET /api/templates/{key}` fetches one, unknown key → 404.
+- `tests/documents_test.rs` — same full-stack style, scoped to `documents` as a resource (Phase 3): `GET /api/documents` lists every recorded document, `GET /api/documents/{key}` fetches one, `GET /api/documents/{key}/pdf` reprints (asserts PDF magic bytes), and 404 `DOCUMENT_NOT_FOUND` for all three on an unknown key.
+- `tests/openapi_test.rs` — real router, real (throwaway-file) SQLite pool, real `RenderEngine::warm_up()`. Asserts every module path is listed and that both the render and reprint endpoints are documented as `application/pdf`.
+- `tests/response_format_test.rs` — no router, no database. Calls `ApiResponse`/`AppError` directly.
+- `src/clients/render.rs`'s `#[cfg(test)]` unit tests — no database, no router; compile the real `receipt.typ`/`sticker.typ` with real sample data and assert real PDF bytes come out (the `sticker` one is also the fastest way to check a `tiaoma`/`zebra` upgrade still compiles). The fastest way to check a Typst/typst-as-lib API change still works.
 
 ## Code Comments
 
@@ -127,3 +115,20 @@ Same rules as jana2u-pos, applied whenever a file is touched:
 1. **Module-level banner** on every file — even a short one — stating what it owns and what it deliberately doesn't do.
 2. **Doc comments (`///`) on `pub`/`pub(crate)` items** whose purpose isn't obvious from the signature.
 3. **Inline comments explain *why*, not *what*** — e.g. why `documents` stores `data` instead of PDF bytes, why templates stay file-based while metadata lives in SQLite, why `key` doubles as the primary key.
+
+## Build Phases
+
+- **Phase 1 — Core service** (done): health, `render` end-to-end for one template (`receipt`), `templates`/`documents` internal plumbing + module-status stubs, OpenAPI, `AppError`/`ApiResponse` envelope, the Phase 1 test suite.
+- **Phase 2 — Second template + barcode/QR** (done): `templates/sticker.typ` (print-size, 50mm×30mm) using the vendored `tiaoma`/`zebra` packages for a Code128 barcode and a QR code (`templates/lib/`); `templates`'s real read routes (`GET /`, `GET /{key}`); `tests/templates_test.rs` and the sticker cases in `render_test.rs`/`clients::render`'s unit tests.
+- **Phase 3 — Documents as first-class resources** (done): `documents`'s real read routes (`GET /`, `GET /{key}`), `GET /api/documents/{key}/pdf` reprint endpoint (`render::service::compile_pdf` extracted so it and `render_template` share the same compile-error mapping), `tests/documents_test.rs`.
+- **Phase 4 — not started**: format negotiation (PNG/SVG), template hot-reload without a restart (see the file-resolver caching trap under "The render pipeline & `RenderEngine`" — this is the concrete gap that phase would close), render result caching keyed on `(template_key, data)`.
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+Rules:
+- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
