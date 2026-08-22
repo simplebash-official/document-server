@@ -1,15 +1,14 @@
 // Shared money formatting for document templates. Mirrors the frontend's
 // `formatMoney()` (src/shared/lib/money.ts): amounts arrive as integer
-// cents, are divided by 100, and rendered with zero decimal places and a
-// thousands separator (the shop's currency — LKR — is configured with
-// `CURRENCY.decimals = 0` app-wide, so this must match, not just look close).
+// cents, are formatted with two decimal places and a thousands separator.
 
-/// Formats integer cents into "Rs. 1,234" (or "-Rs. 1,234" for a negative
+/// Formats integer cents into "Rs. 1,234.50" (or "-Rs. 1,234.50" for a negative
 /// amount). `symbol` defaults to "Rs." to match `CURRENCY.symbol`.
 #let format-money(cents, symbol: "Rs.") = {
-  let whole = int(calc.round(float(cents) / 100))
-  let negative = whole < 0
-  if negative { whole = -whole }
+  let negative = cents < 0
+  let abs-cents = if negative { -cents } else { cents }
+  let whole = int(calc.floor(abs-cents / 100))
+  let remainder = int(abs-cents - whole * 100)
 
   let digits = str(whole)
   let groups = ()
@@ -21,5 +20,7 @@
   groups.push(digits.slice(0, i))
   groups = groups.rev()
 
-  symbol + " " + (if negative { "-" } else { "" }) + groups.join(",")
+  let rem-str = if remainder < 10 { "0" + str(remainder) } else { str(remainder) }
+
+  symbol + " " + (if negative { "-" } else { "" }) + groups.join(",") + "." + rem-str
 }

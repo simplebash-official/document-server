@@ -178,7 +178,7 @@
       text(size: 8.5pt, fill: muted)[Amount Tendered:],
       text(size: 8.5pt, weight: 600)[#format-money(data.at("tenderedAmountCents", default: data.at("totalCents", default: 0)))],
       text(size: 8.5pt, fill: muted)[Balance Due:],
-      text(size: 8.5pt, weight: "bold", fill: if is-credit { credit-color } else { ok-color })[#if is-credit { format-money(data.at("totalCents", default: 0)) } else { "Rs. 0" }],
+      text(size: 8.5pt, weight: "bold", fill: if is-credit { credit-color } else { ok-color })[#if is-credit { format-money(data.at("totalCents", default: 0)) } else { format-money(0) }],
     )
   ],
 )
