@@ -1,0 +1,50 @@
+{
+  "creditNoteNumber": "CN-000042",
+  "formattedDate": "21 Aug 2026",
+  "cashierName": "Nimal Perera",
+  "originalInvoiceNumber": "INV-001042",
+  "noReceipt": false,
+  "isManagerOverride": false,
+  "exchangeReference": "",
+  "customerName": "Kasun Silva",
+  "customerPhone": "077 123 4567",
+  "items": [
+    {
+      "name": "Screen Protector - iPhone 14",
+      "sku": "ACC-SP-014",
+      "serialNumber": "",
+      "quantity": 2,
+      "condition": "Good — Resalable",
+      "disposition": "",
+      "unitPriceCents": 150000,
+      "totalCents": 300000
+    },
+    {
+      "name": "Wireless Earbuds - Model X200",
+      "sku": "ACC-WE-200",
+      "serialNumber": "SN-88213X",
+      "quantity": 1,
+      "condition": "Damaged / Faulty",
+      "disposition": "Write Off",
+      "unitPriceCents": 700000,
+      "totalCents": 700000
+    }
+  ],
+  "refundCashCents": 700000,
+  "balanceReductionCents": 300000,
+  "refundBreakdown": [
+    { "method": "cash", "amountCents": 400000 },
+    { "method": "card", "amountCents": 300000 }
+  ],
+  "notes": "Customer reported earbuds stopped charging after 2 days; unit confirmed faulty on inspection.",
+  "shopTradingName": "TechFix Repairs",
+  "shopLegalName": "TechFix Repairs (Pvt) Ltd",
+  "shopEmail": "info@techfixrepairs.lk",
+  "shopWebsite": "techfixrepairs.lk",
+  "shopBusinessRegNo": "PV 00123456",
+  "shopVatNo": "",
+  "shopIsVatRegistered": false,
+  "shopAddressLines": ["123 Galle Road", "Colombo 04"],
+  "shopPrimaryPhone": "011 234 5678",
+  "shopSecondaryPhone": ""
+}

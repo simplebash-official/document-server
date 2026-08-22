@@ -247,6 +247,108 @@ async fn render_a4_invoice_returns_pdf_and_records_document() {
 }
 
 #[tokio::test]
+async fn render_credit_note_returns_pdf_and_records_document() {
+    let app = common::spawn_app().await;
+
+    let template_key: String = sqlx::query_scalar("SELECT key FROM templates WHERE name = ?")
+        .bind("credit-note")
+        .fetch_one(&app.db)
+        .await
+        .expect("credit-note template should be synced from disk by spawn_app");
+
+    let body = json!({
+        "creditNoteNumber": "CN-000042",
+        "formattedDate": "21 Aug 2026",
+        "cashierName": "Nimal Perera",
+        "originalInvoiceNumber": "INV-001042",
+        "noReceipt": false,
+        "isManagerOverride": false,
+        "exchangeReference": "",
+        "customerName": "Kasun Silva",
+        "customerPhone": "077 123 4567",
+        "items": [
+            {
+                "name": "Screen Protector - iPhone 14",
+                "sku": "ACC-SP-014",
+                "serialNumber": "",
+                "quantity": 2,
+                "condition": "Good — Resalable",
+                "disposition": "",
+                "unitPriceCents": 150000,
+                "totalCents": 300000
+            },
+            {
+                "name": "Wireless Earbuds - Model X200",
+                "sku": "ACC-WE-200",
+                "serialNumber": "SN-88213X",
+                "quantity": 1,
+                "condition": "Damaged / Faulty",
+                "disposition": "Write Off",
+                "unitPriceCents": 700000,
+                "totalCents": 700000
+            }
+        ],
+        "refundCashCents": 700000,
+        "balanceReductionCents": 300000,
+        "refundBreakdown": [
+            {"method": "cash", "amountCents": 400000},
+            {"method": "card", "amountCents": 300000}
+        ],
+        "notes": "Customer reported earbuds stopped charging after 2 days; unit confirmed faulty on inspection.",
+        "shopTradingName": "TechFix Repairs",
+        "shopLegalName": "TechFix Repairs (Pvt) Ltd",
+        "shopEmail": "info@techfixrepairs.lk",
+        "shopWebsite": "techfixrepairs.lk",
+        "shopBusinessRegNo": "PV 00123456",
+        "shopVatNo": "",
+        "shopIsVatRegistered": false,
+        "shopAddressLines": ["123 Galle Road", "Colombo 04"],
+        "shopPrimaryPhone": "011 234 5678",
+        "shopSecondaryPhone": "",
+    });
+
+    let response = app
+        .router
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/render/{template_key}"))
+                .header("content-type", "application/json")
+                .header("X-Internal-Api-Key", &app.config.internal_api_key)
+                .body(Body::from(body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response
+            .headers()
+            .get("content-type")
+            .and_then(|v| v.to_str().ok()),
+        Some("application/pdf")
+    );
+
+    let pdf_bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert!(
+        pdf_bytes.starts_with(b"%PDF-"),
+        "response body does not start with the PDF magic bytes"
+    );
+
+    let file_size_bytes: i64 =
+        sqlx::query_scalar("SELECT file_size_bytes FROM documents WHERE template_key = ?")
+            .bind(&template_key)
+            .fetch_one(&app.db)
+            .await
+            .expect("render_template should have recorded a documents entry");
+    assert_eq!(file_size_bytes, pdf_bytes.len() as i64);
+}
+
+#[tokio::test]
 async fn render_sticker_returns_pdf_and_records_document() {
     let app = common::spawn_app().await;
 
