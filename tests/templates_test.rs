@@ -37,7 +37,10 @@ async fn list_templates_returns_every_seeded_template_with_type_and_expected_dat
         .iter()
         .map(|t| t["name"].as_str().unwrap())
         .collect();
-    assert_eq!(names, vec!["a4-invoice", "sticker", "thermal-receipt"]);
+    assert_eq!(
+        names,
+        vec!["a4-invoice", "credit-note", "sticker", "thermal-receipt"]
+    );
     assert!(templates.iter().all(|t| t["isActive"] == true));
 
     let invoice_tpl = templates
@@ -48,6 +51,15 @@ async fn list_templates_returns_every_seeded_template_with_type_and_expected_dat
     assert_eq!(invoice_tpl["data"]["invoiceNumber"], "INV-000123");
     assert!(invoice_tpl["data"]["items"].is_array());
     assert_eq!(invoice_tpl["data"]["totalCents"], 1100000);
+
+    let credit_note_tpl = templates
+        .iter()
+        .find(|t| t["name"] == "credit-note")
+        .unwrap();
+    assert_eq!(credit_note_tpl["type"], "document");
+    assert_eq!(credit_note_tpl["data"]["creditNoteNumber"], "CN-000042");
+    assert!(credit_note_tpl["data"]["items"].is_array());
+    assert_eq!(credit_note_tpl["data"]["refundCashCents"], 700000);
 
     let receipt_tpl = templates
         .iter()
@@ -91,12 +103,12 @@ async fn list_templates_filters_by_type() {
     .unwrap();
 
     let templates = json["data"]["templates"].as_array().unwrap();
-    assert_eq!(templates.len(), 2);
+    assert_eq!(templates.len(), 3);
     let names: Vec<&str> = templates
         .iter()
         .map(|t| t["name"].as_str().unwrap())
         .collect();
-    assert_eq!(names, vec!["a4-invoice", "thermal-receipt"]);
+    assert_eq!(names, vec!["a4-invoice", "credit-note", "thermal-receipt"]);
     assert!(templates.iter().all(|t| t["type"] == "document"));
 
     // Filter by type=label
