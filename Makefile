@@ -1,4 +1,4 @@
-.PHONY: check ci test
+.PHONY: check ci test docker-build docker-run docker-stop
 
 check:
 	cargo fmt --check
@@ -6,3 +6,13 @@ check:
 	cargo test
 
 ci: check
+
+docker-build:
+	docker build -t document-server:latest .
+
+docker-run:
+	docker run --rm -p 8090:8090 -e INTERNAL_API_KEY=test-internal-api-key --name document-server-test document-server:latest
+
+docker-stop:
+	docker stop document-server-test || true
+

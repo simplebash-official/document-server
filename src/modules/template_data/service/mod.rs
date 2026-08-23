@@ -74,7 +74,10 @@ pub(crate) async fn list_template_data(
 ) -> AppResult<TemplateDataListResponse> {
     let rows = repository::list_by_template(db, template_name).await?;
     Ok(TemplateDataListResponse {
-        items: rows.into_iter().map(|row| row.into_template_data()).collect(),
+        items: rows
+            .into_iter()
+            .map(|row| row.into_template_data())
+            .collect(),
     })
 }
 

@@ -5,7 +5,10 @@
 // verbatim: any shape is accepted at write time, because whether a field
 // matters is the *template's* schema's decision, enforced at render.
 
-use axum::{Json, extract::{Path, State}};
+use axum::{
+    Json,
+    extract::{Path, State},
+};
 use utoipa::ToSchema;
 use utoipa_axum::{router::OpenApiRouter, routes};
 
@@ -64,14 +67,9 @@ async fn set_template_data(
     Path((template_name, data_key)): Path<(String, String)>,
     Json(data): Json<serde_json::Value>,
 ) -> AppResult<Json<ApiResponse<TemplateData>>> {
-    let stored =
-        service::set_template_data(&state.db, &template_name, &data_key, data)
-            .await?;
+    let stored = service::set_template_data(&state.db, &template_name, &data_key, data).await?;
 
-    Ok(Json(ApiResponse::success(
-        stored,
-        "Template data stored",
-    )))
+    Ok(Json(ApiResponse::success(stored, "Template data stored")))
 }
 
 #[utoipa::path(
@@ -148,11 +146,7 @@ async fn delete_template_data(
     State(state): State<AppState>,
     Path((template_name, data_key)): Path<(String, String)>,
 ) -> AppResult<Json<ApiResponse<TemplateData>>> {
-    let deleted =
-        service::delete_template_data(&state.db, &template_name, &data_key).await?;
+    let deleted = service::delete_template_data(&state.db, &template_name, &data_key).await?;
 
-    Ok(Json(ApiResponse::success(
-        deleted,
-        "Template data deleted",
-    )))
+    Ok(Json(ApiResponse::success(deleted, "Template data deleted")))
 }
