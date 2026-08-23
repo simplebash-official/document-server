@@ -8,6 +8,7 @@
 
 use std::sync::Arc;
 
+use arc_swap::ArcSwap;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use document_server::{
@@ -41,7 +42,7 @@ async fn build_test_app() -> axum::Router {
     let state = AppState {
         config: Arc::new(config),
         db,
-        render: Arc::new(render),
+        render: Arc::new(ArcSwap::from_pointee(render)),
     };
     app::build_router(state)
 }
@@ -73,6 +74,7 @@ async fn openapi_json_lists_all_module_paths() {
         "/api/render",
         "/api/render/{templateKey}",
         "/api/templates",
+        "/api/templates/sync",
         "/api/templates/{key}",
         "/api/documents",
         "/api/documents/{key}",

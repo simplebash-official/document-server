@@ -99,7 +99,10 @@ async fn reprint_document(
     State(state): State<AppState>,
     Path(key): Path<String>,
 ) -> AppResult<Response> {
-    let pdf_bytes = service::reprint_document(&state.db, &state.render, &key).await?;
+    // `load_full()` snapshots the current engine — a sync endpoint swapping
+    // in a rebuilt one mid-request doesn't affect this reprint.
+    let render = state.render.load_full();
+    let pdf_bytes = service::reprint_document(&state.db, &render, &key).await?;
 
     Ok((
         StatusCode::OK,

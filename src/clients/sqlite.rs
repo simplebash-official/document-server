@@ -38,6 +38,7 @@ async fn create_schema(pool: &SqlitePool) -> Result<(), sqlx::Error> {
             type TEXT NOT NULL DEFAULT 'document',
             description TEXT NOT NULL DEFAULT '',
             data_schema TEXT,
+            sample_data TEXT,
             is_active INTEGER NOT NULL,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
@@ -51,6 +52,16 @@ async fn create_schema(pool: &SqlitePool) -> Result<(), sqlx::Error> {
         .execute(pool)
         .await;
 
+    // Same additive pattern as `type` above. `data_schema` predates this and
+    // historically held whatever `<name>.json` sidecar contained (sample
+    // data) under a misleading name; from the schema-sidecar feature onward
+    // it holds the real `<name>.schema.json` contract instead, and samples
+    // move to their own honestly-named column. The next disk sync rewrites
+    // both columns, so an old database self-corrects on first boot.
+    let _ = sqlx::query("ALTER TABLE templates ADD COLUMN sample_data TEXT")
+        .execute(pool)
+        .await;
+
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS documents (
             key TEXT PRIMARY KEY,
@@ -59,6 +70,20 @@ async fn create_schema(pool: &SqlitePool) -> Result<(), sqlx::Error> {
             file_size_bytes INTEGER NOT NULL,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
+        )",
+    )
+    .execute(pool)
+    .await?;
+
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS template_data (
+            key TEXT PRIMARY KEY,
+            template_name TEXT NOT NULL,
+            data_key TEXT NOT NULL,
+            data TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE (template_name, data_key)
         )",
     )
     .execute(pool)

@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "0883660c-a4fe-456e-9da8-aa21dd56016c",
     "name": "document-server",
-    "description": "Standalone Rust/Axum service that renders PDFs from Typst templates and generates standalone 1D barcodes and 2D QR codes. **No authentication** — every route here is open, so there is no Bearer/API-key setup needed.\n\nBase URL (and sample keys) are environment variables — switch the active Postman environment (Development/Production) to point requests at the right instance.\n\n**Modules**:\n- `Health`: Liveness probe (`/api/health`).\n- `Render`: PDF rendering endpoint (`/api/render/{templateKey}`) with dynamic barcode/QR placeholder support.\n- `Templates`: Template metadata listing and retrieval (`/api/templates`), categorized into `document` and `label` with `?type=document|label` filtering.\n- `Documents`: Document history and recompilation reprints (`/api/documents/{key}/pdf`).\n- `Barcodes`: Standalone 1D barcode generator (`/api/barcodes/generate`) supporting JSON and direct SVG streaming (Code128, Code39, EAN13, EAN8).\n- `QRCodes`: Standalone 2D QR code generator (`/api/qrcodes/generate`) supporting JSON and direct SVG streaming (ECC levels L, M, Q, H).\n\n**Getting real template keys**: run `Templates > List Templates` and copy the `key` values into `templateKey` (receipt document) or `stickerKey` (sticker label).\n\n**Getting a real document key**: run `Render > Render Receipt` once, then `Documents > List Documents` and copy a `key` into `documentKey`.",
+    "description": "Standalone Rust/Axum service that renders PDFs from Typst templates and generates standalone 1D barcodes and 2D QR codes. **No authentication** \u2014 every route here is open, so there is no Bearer/API-key setup needed.\n\nBase URL (and sample keys) are environment variables \u2014 switch the active Postman environment (Development/Production) to point requests at the right instance.\n\n**Modules**:\n- `Health`: Liveness probe (`/api/health`).\n- `Render`: PDF rendering endpoint (`/api/render/{templateKey}`) with dynamic barcode/QR placeholder support.\n- `Templates`: Template metadata listing and retrieval (`/api/templates`), categorized into `document` and `label` with `?type=document|label` filtering.\n- `Documents`: Document history and recompilation reprints (`/api/documents/{key}/pdf`).\n- `Barcodes`: Standalone 1D barcode generator (`/api/barcodes/generate`) supporting JSON and direct SVG streaming (Code128, Code39, EAN13, EAN8).\n- `QRCodes`: Standalone 2D QR code generator (`/api/qrcodes/generate`) supporting JSON and direct SVG streaming (ECC levels L, M, Q, H).\n\n**Getting real template keys**: run `Templates > List Templates` and copy the `key` values into `templateKey` (receipt document) or `stickerKey` (sticker label).\n\n**Getting a real document key**: run `Render > Render Receipt` once, then `Documents > List Documents` and copy a `key` into `documentKey`.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -16,10 +16,15 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/health",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "health"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "health"
+              ]
             },
-            "description": "Liveness check — always returns 200 if the process is up and able to handle a request at all. Doesn't touch SQLite or the render engine, so it can't distinguish \"server up, database down\"."
+            "description": "Liveness check \u2014 always returns 200 if the process is up and able to handle a request at all. Doesn't touch SQLite or the render engine, so it can't distinguish \"server up, database down\"."
           },
           "response": []
         }
@@ -35,10 +40,15 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/render",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "render"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "render"
+              ]
             },
-            "description": "Trivial \"is this module wired up\" check — not a health/readiness probe."
+            "description": "Trivial \"is this module wired up\" check \u2014 not a health/readiness probe."
           },
           "response": []
         },
@@ -54,8 +64,14 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/api/render/{{templateKey}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "render", "{{templateKey}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "render",
+                "{{templateKey}}"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -82,8 +98,14 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/api/render/{{stickerKey}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "render", "{{stickerKey}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "render",
+                "{{stickerKey}}"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -94,7 +116,7 @@
                 }
               }
             },
-            "description": "Compiles the `sticker` label template (50mm×30mm thermal label) with a Code128 barcode and QR code encoding `reference` via `templates/lib/codes.typ`. Returns raw PDF bytes on success."
+            "description": "Compiles the `sticker` label template (50mm\u00d730mm thermal label) with a Code128 barcode and QR code encoding `reference` via `templates/lib/codes.typ`. Returns raw PDF bytes on success."
           },
           "response": []
         }
@@ -110,8 +132,13 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/templates",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "templates"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "templates"
+              ],
               "query": [
                 {
                   "key": "type",
@@ -132,8 +159,13 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/templates?type=document",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "templates"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "templates"
+              ],
               "query": [
                 {
                   "key": "type",
@@ -152,8 +184,13 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/templates?type=label",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "templates"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "templates"
+              ],
               "query": [
                 {
                   "key": "type",
@@ -172,10 +209,42 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/templates/{{templateKey}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "templates", "{{templateKey}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "templates",
+                "{{templateKey}}"
+              ]
             },
             "description": "Fetch one template's metadata by `key` (including `name`, `type`, `description`, `data` expected payload sub-object, `isActive`). 404 `TEMPLATE_NOT_FOUND` if key doesn't exist."
+          },
+          "response": []
+        },
+        {
+          "name": "Sync templates from disk",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Internal-Api-Key",
+                "value": "{{internalApiKey}}",
+                "description": "Required \u2014 internal callers only."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/templates/sync",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "templates",
+                "sync"
+              ]
+            },
+            "description": "Runtime re-sync without a restart: rescans the templates directory, rebuilds the render engine, upserts metadata for every .typ found (including each template's dataSchema contract), and deactivates templates whose .typ file disappeared (rows are never deleted \u2014 keys are stable and history references them). Returns syncedCount, deactivatedCount and the template names now known."
           },
           "response": []
         }
@@ -191,8 +260,13 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/documents",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "documents"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "documents"
+              ]
             },
             "description": "Lists every recorded document (written upon successful render), newest first. Use this to find a real `key` for `{{documentKey}}`."
           },
@@ -205,8 +279,14 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/documents/{{documentKey}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "documents", "{{documentKey}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "documents",
+                "{{documentKey}}"
+              ]
             },
             "description": "Fetch one document's metadata by `key` (templateKey, JSON data, and fileSizeBytes). 404 `DOCUMENT_NOT_FOUND` if the key doesn't exist."
           },
@@ -219,10 +299,138 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/documents/{{documentKey}}/pdf",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "documents", "{{documentKey}}", "pdf"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "documents",
+                "{{documentKey}}",
+                "pdf"
+              ]
             },
             "description": "Recompiles this document's stored JSON `data` against its template and returns raw PDF bytes (`Content-Type: application/pdf`)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Template Data",
+      "item": [
+        {
+          "name": "Store shared data blob",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-Internal-Api-Key",
+                "value": "{{internalApiKey}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"shopTradingName\": \"TechFix Repairs\",\n  \"shopLegalName\": \"TechFix Repairs (Pvt) Ltd\",\n  \"bankName\": \"Commercial Bank\",\n  \"accountNumber\": \"1234567890\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/template-data/{{templateName}}/{{dataKey}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "template-data",
+                "{{templateName}}",
+                "{{dataKey}}"
+              ]
+            },
+            "description": "Stores (or replaces) one shared/static JSON blob scoped to a template by name. The template must already exist. At render time every stored blob for that template is deep-merged under the request payload with request fields winning, so callers can omit genuinely static fields. Internal callers only."
+          },
+          "response": []
+        },
+        {
+          "name": "Get one data blob",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Internal-Api-Key",
+                "value": "{{internalApiKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/template-data/{{templateName}}/{{dataKey}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "template-data",
+                "{{templateName}}",
+                "{{dataKey}}"
+              ]
+            },
+            "description": "Fetches one stored blob by (templateName, dataKey). Internal callers only."
+          },
+          "response": []
+        },
+        {
+          "name": "List all blobs for a template",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-Internal-Api-Key",
+                "value": "{{internalApiKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/template-data/{{templateName}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "template-data",
+                "{{templateName}}"
+              ]
+            },
+            "description": "Lists every stored blob for the template. Internal callers only."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete one data blob",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-Internal-Api-Key",
+                "value": "{{internalApiKey}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/template-data/{{templateName}}/{{dataKey}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "template-data",
+                "{{templateName}}",
+                "{{dataKey}}"
+              ]
+            },
+            "description": "Deletes one stored blob and echoes it back; 404 TEMPLATE_DATA_NOT_FOUND when absent. Internal callers only."
           },
           "response": []
         }
@@ -238,8 +446,13 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/barcodes",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "barcodes"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "barcodes"
+              ]
             },
             "description": "Module status check for the Barcodes service."
           },
@@ -257,8 +470,14 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/api/barcodes/generate",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "barcodes", "generate"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "barcodes",
+                "generate"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -280,8 +499,14 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/barcodes/generate?content=INV-123456&symbology=code128&height=80",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "barcodes", "generate"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "barcodes",
+                "generate"
+              ],
               "query": [
                 {
                   "key": "content",
@@ -316,8 +541,13 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/qrcodes",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "qrcodes"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "qrcodes"
+              ]
             },
             "description": "Module status check for the QR Codes service."
           },
@@ -335,8 +565,14 @@
             ],
             "url": {
               "raw": "{{baseUrl}}/api/qrcodes/generate",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "qrcodes", "generate"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "qrcodes",
+                "generate"
+              ]
             },
             "body": {
               "mode": "raw",
@@ -358,8 +594,14 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/qrcodes/generate?content=https://jana2u.com/pay/INV-123456&ecc=M",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "qrcodes", "generate"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "qrcodes",
+                "generate"
+              ],
               "query": [
                 {
                   "key": "content",

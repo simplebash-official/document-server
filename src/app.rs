@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use arc_swap::ArcSwap;
 use axum::{Json, Router, http::Method};
 use sqlx::SqlitePool;
 use tower_http::{
@@ -22,14 +23,15 @@ use crate::{
 /// Shared application state injected into every handler via Axum's `State`
 /// extractor. `Arc<Config>` because `Config` is read-only after startup;
 /// `SqlitePool` is already an internally-`Arc`'d connection pool, so cloning
-/// it per-request is cheap; `Arc<RenderEngine>` for the same reason as
-/// `Config` — built once at startup, read-only, shared across every
-/// concurrent render.
+/// it per-request is cheap; the render engine is an `ArcSwap` rather than a
+/// plain `Arc` because `POST /api/templates/sync` rebuilds it from disk at
+/// runtime — readers (`load_full()`) always see one coherent fully-warmed
+/// engine, never a half-built one.
 #[derive(Clone)]
 pub struct AppState {
     pub config: Arc<Config>,
     pub db: SqlitePool,
-    pub render: Arc<RenderEngine>,
+    pub render: Arc<ArcSwap<RenderEngine>>,
 }
 
 /// Assembles the full HTTP router: the top-level `/health` check, every
@@ -63,15 +65,14 @@ pub fn build_router(state: AppState) -> Router {
 
     use crate::core::constants::modules as mod_names;
 
-    // There is no authentication layer anywhere below this line, and none
-    // is added anywhere else in this codebase — document_server has no auth
-    // concept at all (see spec's Auth section). There is deliberately no
-    // extractor like jana2u-pos's `CurrentUser`/`AdminUser`, no
-    // PUBLIC_ROUTES allowlist, and no `authorization_test.rs` equivalent,
-    // because there is nothing to allow-list against: every route
-    // registered below is reachable by any caller by design. If auth is
-    // ever introduced, it must be a deliberate new addition — nothing here
-    // half-implements it today.
+    // Access control below is the single shared-secret model of
+    // `core::middleware::auth`: routes meant only for the backend callers
+    // (`render`, `documents`, `templates/sync`, all of `template-data`)
+    // take the `InternalCaller` extractor and require `X-Internal-Api-Key`,
+    // while genuinely-public reads (`GET /api/templates*`, health, Swagger)
+    // take no extractor. There are no users/roles/tokens here — if a richer
+    // auth model is ever needed, it must be a deliberate new addition, not
+    // a half-extension of this one.
     let api_router: OpenApiRouter<AppState> = OpenApiRouter::new()
         .routes(routes!(health))
         .nest(
@@ -85,6 +86,10 @@ pub fn build_router(state: AppState) -> Router {
         .nest(
             &format!("/{}", mod_names::DOCUMENTS),
             modules::documents::routes::router(),
+        )
+        .nest(
+            &format!("/{}", mod_names::TEMPLATE_DATA),
+            modules::template_data::routes::router(),
         )
         .nest(
             &format!("/{}", mod_names::BARCODES),

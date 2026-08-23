@@ -2,3 +2,4 @@
 
 pub const TEMPLATE: &str = "tpl";
 pub const DOCUMENT: &str = "doc";
+pub const TEMPLATE_DATA: &str = "tdat";

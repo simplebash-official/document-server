@@ -5,6 +5,7 @@ edition = "2024"
 default-run = "document_server"
 
 [dependencies]
+arc-swap = "1"
 axum = "0.8.9"
 chrono = { version = "0.4.45", features = ["serde"] }
 dotenvy = "0.15.7"
@@ -33,6 +34,10 @@ typst-pdf = "0.15"
 # defined in this crate, not re-exported through the `typst` facade, so it
 # must be a direct dependency to be nameable in our own code.
 typst-layout = "0.15"
+# Validates render payloads against a template's `<name>.schema.json`
+# contract (see `modules::render::service`) — draft-07 covers everything the
+# sidecar schemas use. Drafts are auto-detected from `$schema`.
+jsonschema = "0.50"
 qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 barcoders = { version = "2.0", default-features = false, features = ["svg", "std"] }
 

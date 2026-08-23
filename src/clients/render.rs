@@ -40,6 +40,11 @@ pub struct DiscoveredTemplate {
     pub file_path: String,
     pub template_type: TemplateType,
     pub sample_data: Option<serde_json::Value>,
+    /// Parsed `<name>.schema.json` sidecar — the template's machine-readable
+    /// input contract (JSON Schema; drafts auto-detected from `$schema`).
+    /// `None` when no sidecar exists: that template renders without payload
+    /// validation, exactly as it did before schemas were introduced.
+    pub data_schema: Option<serde_json::Value>,
 }
 
 pub struct RenderEngine {
@@ -195,46 +200,50 @@ fn scan_templates(dir: &Path) -> Result<Vec<DiscoveredTemplate>, RenderEngineErr
                 if sub_path.extension().and_then(|ext| ext.to_str()) == Some("typ")
                     && let Some(stem) = sub_path.file_stem().and_then(|s| s.to_str())
                 {
-                    let json_path = sub_path.with_extension("json");
-                    let sample_data = if json_path.is_file() {
-                        std::fs::read_to_string(&json_path)
-                            .ok()
-                            .and_then(|c| serde_json::from_str::<serde_json::Value>(&c).ok())
-                    } else {
-                        None
-                    };
+                    let (sample_data, data_schema) = read_sidecars(&sub_path);
 
                     templates.push(DiscoveredTemplate {
                         name: stem.to_string(),
                         file_path: format!("{file_name_str}/{stem}.typ"),
                         template_type: sub_type,
                         sample_data,
+                        data_schema,
                     });
                 }
             }
         } else if path.extension().and_then(|ext| ext.to_str()) == Some("typ")
             && let Some(stem) = path.file_stem().and_then(|s| s.to_str())
         {
-            let json_path = path.with_extension("json");
-            let sample_data = if json_path.is_file() {
-                std::fs::read_to_string(&json_path)
-                    .ok()
-                    .and_then(|c| serde_json::from_str::<serde_json::Value>(&c).ok())
-            } else {
-                None
-            };
+            let (sample_data, data_schema) = read_sidecars(&path);
 
             templates.push(DiscoveredTemplate {
                 name: stem.to_string(),
                 file_path: format!("{stem}.typ"),
                 template_type: TemplateType::Document,
                 sample_data,
+                data_schema,
             });
         }
     }
 
     templates.sort_by(|a, b| a.name.cmp(&b.name));
     Ok(templates)
+}
+
+/// Reads a `.typ` file's optional sidecars: `<stem>.json` (sample data, the
+/// long-standing convention) and `<stem>.schema.json` (the machine-readable
+/// input contract). Both are best-effort — an unparseable sidecar is treated
+/// as absent rather than failing startup, same tolerance the sample-data
+/// sidecar always had.
+fn read_sidecars(typ_path: &Path) -> (Option<serde_json::Value>, Option<serde_json::Value>) {
+    let sample_data = std::fs::read_to_string(typ_path.with_extension("json"))
+        .ok()
+        .and_then(|c| serde_json::from_str::<serde_json::Value>(&c).ok());
+    let data_schema = std::fs::read_to_string(typ_path.with_extension("schema.json"))
+        .ok()
+        .and_then(|c| serde_json::from_str::<serde_json::Value>(&c).ok());
+
+    (sample_data, data_schema)
 }
 
 #[cfg(test)]

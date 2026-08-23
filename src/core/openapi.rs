@@ -20,6 +20,7 @@ use utoipa::{
         (name = "render", description = "Template rendering"),
         (name = "templates", description = "Template metadata"),
         (name = "documents", description = "Rendered document records"),
+        (name = "template-data", description = "Stored shared/static template data merged into render payloads"),
         (name = "barcodes", description = "1D Barcode generation"),
         (name = "qrcodes", description = "2D QR Code generation"),
     )

@@ -1,0 +1,74 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Credit Note",
+  "description": "Input contract for credit-note.typ — see that file's header comment for the authoritative field-by-field description and credit-note.json for a worked example.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "creditNoteNumber",
+    "formattedDate",
+    "cashierName",
+    "noReceipt",
+    "isManagerOverride",
+    "items",
+    "refundCashCents",
+    "balanceReductionCents",
+    "refundBreakdown",
+    "shopIsVatRegistered",
+    "shopAddressLines"
+  ],
+  "properties": {
+    "creditNoteNumber": { "type": "string" },
+    "formattedDate": { "type": "string" },
+    "cashierName": { "type": "string" },
+    "originalInvoiceNumber": { "type": "string" },
+    "noReceipt": { "type": "boolean" },
+    "isManagerOverride": { "type": "boolean" },
+    "exchangeReference": { "type": "string" },
+    "customerName": { "type": "string" },
+    "customerPhone": { "type": "string" },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["name", "quantity", "condition", "unitPriceCents", "totalCents"],
+        "properties": {
+          "name": { "type": "string" },
+          "sku": { "type": "string" },
+          "serialNumber": { "type": "string" },
+          "quantity": { "type": "integer", "minimum": 1 },
+          "condition": { "type": "string" },
+          "disposition": { "type": "string" },
+          "unitPriceCents": { "type": "integer" },
+          "totalCents": { "type": "integer" }
+        }
+      }
+    },
+    "refundCashCents": { "type": "integer" },
+    "balanceReductionCents": { "type": "integer" },
+    "refundBreakdown": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["method", "amountCents"],
+        "properties": {
+          "method": { "type": "string" },
+          "amountCents": { "type": "integer" }
+        }
+      }
+    },
+    "notes": { "type": "string" },
+    "shopTradingName": { "type": "string" },
+    "shopLegalName": { "type": "string" },
+    "shopEmail": { "type": "string" },
+    "shopWebsite": { "type": "string" },
+    "shopBusinessRegNo": { "type": "string" },
+    "shopVatNo": { "type": "string" },
+    "shopIsVatRegistered": { "type": "boolean" },
+    "shopAddressLines": { "type": "array", "items": { "type": "string" } },
+    "shopPrimaryPhone": { "type": "string" },
+    "shopSecondaryPhone": { "type": "string" }
+  }
+}

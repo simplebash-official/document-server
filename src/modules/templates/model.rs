@@ -19,7 +19,13 @@ pub struct TemplateRow {
     /// Template categorization (`"document"` or `"label"`)
     pub r#type: String,
     pub description: String,
+    /// The template's machine-readable input contract, synced from the
+    /// `<name>.schema.json` sidecar. Historically this column held sample
+    /// data under a misleading name; the disk sync rewrites it with the real
+    /// schema on first boot after that change (see `clients::sqlite`).
     pub data_schema: Option<Json<serde_json::Value>>,
+    /// Worked example of valid input, synced from the `<name>.json` sidecar.
+    pub sample_data: Option<Json<serde_json::Value>>,
     pub is_active: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -37,7 +43,8 @@ impl TemplateRow {
             name: self.name,
             r#type: template_type,
             description: self.description,
-            data: self.data_schema.map(|Json(value)| value),
+            data_schema: self.data_schema.map(|Json(value)| value),
+            data: self.sample_data.map(|Json(value)| value),
             is_active: self.is_active,
             created_at: self.created_at,
             updated_at: self.updated_at,
