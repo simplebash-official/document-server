@@ -8,6 +8,8 @@
 
 use std::sync::Arc;
 
+use arc_swap::ArcSwap;
+
 use document_server::{
     app, app::AppState, clients, clients::render::RenderEngine, core::config::Config,
     modules::templates,
@@ -72,7 +74,7 @@ async fn main() {
     let state = AppState {
         config: Arc::new(config),
         db,
-        render: Arc::new(render),
+        render: Arc::new(ArcSwap::from_pointee(render)),
     };
     let router = app::build_router(state);
 

@@ -51,6 +51,14 @@ pub struct Template {
     pub name: String,
     pub r#type: TemplateType,
     pub description: String,
+    /// The template's machine-readable input contract (JSON Schema, parsed
+    /// from the `<name>.schema.json` sidecar) — what an integration client
+    /// fetches in order to know how to feed a render. `None` when the
+    /// template ships no schema sidecar.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data_schema: Option<serde_json::Value>,
+    /// A worked example of valid input (parsed from the `<name>.json`
+    /// sidecar) — documentation/sample payload, never enforced.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data: Option<serde_json::Value>,
     pub is_active: bool,
@@ -63,4 +71,19 @@ pub struct Template {
 #[serde(rename_all = "camelCase")]
 pub struct TemplatesResponse {
     pub templates: Vec<Template>,
+}
+
+/// Response body for `POST /api/templates/sync` — what the disk scan found,
+/// and how many stale rows (`.typ` files that no longer exist on disk) were
+/// marked inactive. Template names are included so an operator immediately
+/// sees what the service now knows about.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncTemplatesResponse {
+    /// Templates discovered on disk and upserted (active).
+    pub synced_count: u64,
+    /// Previously-active rows whose `.typ` file is gone from disk — they are
+    /// deactivated, never deleted (their keys stay stable for history).
+    pub deactivated_count: u64,
+    pub templates: Vec<String>,
 }

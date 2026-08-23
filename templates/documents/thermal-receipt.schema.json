@@ -1,0 +1,81 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Thermal Receipt",
+  "description": "Input contract for thermal-receipt.typ — see that file's header comment for the authoritative field-by-field description and thermal-receipt.json for a worked example.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "paperWidthMm",
+    "invoiceNumber",
+    "formattedDate",
+    "formattedTime",
+    "cashierName",
+    "items",
+    "subtotalCents",
+    "discountCents",
+    "totalCents",
+    "paymentMethod",
+    "isCredit",
+    "shopTradingName",
+    "shopLegalName",
+    "shopAddressLines"
+  ],
+  "properties": {
+    "paperWidthMm": { "type": "integer", "enum": [58, 80] },
+    "invoiceNumber": { "type": "string" },
+    "formattedDate": { "type": "string" },
+    "formattedTime": { "type": "string" },
+    "cashierName": { "type": "string" },
+    "customerName": { "type": "string" },
+    "customerPhone": { "type": "string" },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["name", "quantity", "unitPriceCents", "discountCents", "totalCents"],
+        "properties": {
+          "name": { "type": "string" },
+          "sku": { "type": "string" },
+          "sourceTicketNumber": { "type": "string" },
+          "quantity": { "type": "integer", "minimum": 1 },
+          "unitPriceCents": { "type": "integer" },
+          "discountCents": { "type": "integer" },
+          "totalCents": { "type": "integer" }
+        }
+      }
+    },
+    "subtotalCents": { "type": "integer" },
+    "discountCents": { "type": "integer" },
+    "taxCents": { "type": "integer" },
+    "totalCents": { "type": "integer" },
+    "paymentMethod": {
+      "type": "string",
+      "enum": ["cash", "card", "online", "split", "credit"]
+    },
+    "tenderedAmountCents": { "type": "integer" },
+    "changeDueCents": { "type": "integer" },
+    "cardLast4": { "type": "string" },
+    "splitPayments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["method", "amountCents"],
+        "properties": {
+          "method": { "type": "string" },
+          "amountCents": { "type": "integer" },
+          "cardLast4": { "type": "string" }
+        }
+      }
+    },
+    "isCredit": { "type": "boolean" },
+    "warrantyText": { "type": "string" },
+    "footerText": { "type": "string" },
+    "shopTradingName": { "type": "string" },
+    "shopLegalName": { "type": "string" },
+    "shopAddressLines": { "type": "array", "items": { "type": "string" } },
+    "shopPrimaryPhone": { "type": "string" },
+    "shopSecondaryPhone": { "type": "string" }
+  }
+}

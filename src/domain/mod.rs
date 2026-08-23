@@ -4,6 +4,7 @@
 pub mod barcodes;
 pub mod documents;
 pub mod qrcodes;
+pub mod template_data;
 pub mod templates;
 
 use serde::Serialize;

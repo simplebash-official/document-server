@@ -12,7 +12,7 @@ use crate::{
         id::generate_id,
     },
     domain::documents::{Document, DocumentsResponse},
-    modules::{documents::repository, render, templates},
+    modules::{documents::repository, render, template_data, templates},
 };
 
 /// Records a successful render. Stores `data`, not the PDF bytes — a
@@ -80,5 +80,17 @@ pub(crate) async fn reprint_document(
     let document = get_document_by_key(db, key).await?;
     let template = templates::service::get_template_by_key(db, &document.template_key).await?;
 
-    render::service::compile_pdf(render_engine, &template.name, document.data)
+    // The stored `data` is the original *request* payload (see
+    // `render_template`), so the stored-data merge re-applies here exactly
+    // as it did on the first render — updates to stored blobs flow into
+    // reprints without touching history.
+    let compiled_input =
+        template_data::service::merge_into_payload(db, &template.name, document.data).await?;
+
+    render::service::compile_pdf(
+        render_engine,
+        &template.name,
+        template.data_schema.as_ref(),
+        compiled_input,
+    )
 }

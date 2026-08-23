@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use arc_swap::ArcSwap;
 use axum::Router;
 use document_server::{
     app, app::AppState, clients, clients::render::RenderEngine, core::config::Config,
@@ -25,6 +26,14 @@ pub struct TestApp {
 /// crate root `cargo test` runs from). Every call gets its own database, so
 /// tests are isolated from each other with no external service to run.
 pub async fn spawn_app() -> TestApp {
+    spawn_app_with_templates_dir("templates").await
+}
+
+/// Same as `spawn_app`, but pointing the engine (and the sync endpoint) at a
+/// different templates directory — used by tests that add/remove `.typ`
+/// files at runtime to prove `POST /api/templates/sync` picks them up
+/// without touching this repo's real `templates/` tree.
+pub async fn spawn_app_with_templates_dir(templates_dir: &str) -> TestApp {
     dotenvy::dotenv().ok();
 
     if std::env::var("INTERNAL_API_KEY").is_err() {
@@ -37,6 +46,7 @@ pub async fn spawn_app() -> TestApp {
     let mut config = Config::from_env().expect("invalid configuration for test run");
     let db_file = tempfile::NamedTempFile::new().expect("create temp sqlite file");
     config.database_url = format!("sqlite://{}", db_file.path().display());
+    config.templates_dir = templates_dir.to_string();
 
     let db = clients::sqlite::connect(&config.database_url)
         .await
@@ -53,7 +63,7 @@ pub async fn spawn_app() -> TestApp {
     let state = AppState {
         config: config.clone(),
         db: db.clone(),
-        render: Arc::new(render),
+        render: Arc::new(ArcSwap::from_pointee(render)),
     };
 
     TestApp {

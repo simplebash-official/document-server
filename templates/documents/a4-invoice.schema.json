@@ -1,0 +1,92 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "A4 Invoice",
+  "description": "Input contract for a4-invoice.typ — see that file's header comment for the authoritative field-by-field description and a4-invoice.json for a worked example.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "invoiceNumber",
+    "formattedDate",
+    "formattedTime",
+    "cashierName",
+    "status",
+    "isCredit",
+    "copyDesignation",
+    "isDuplicate",
+    "paymentMethod",
+    "tenderedAmountCents",
+    "items",
+    "subtotalCents",
+    "discountCents",
+    "totalCents",
+    "amountInWords",
+    "showBankDetails",
+    "shopIsVatRegistered",
+    "shopAddressLines"
+  ],
+  "properties": {
+    "invoiceNumber": { "type": "string" },
+    "formattedDate": { "type": "string" },
+    "formattedTime": { "type": "string" },
+    "dueDate": { "type": "string" },
+    "cashierName": { "type": "string" },
+    "status": {
+      "type": "string",
+      "enum": ["paid", "pending", "partially_paid", "voided", "closed"]
+    },
+    "isCredit": { "type": "boolean" },
+    "copyDesignation": { "type": "string" },
+    "isDuplicate": { "type": "boolean" },
+    "customerName": { "type": "string" },
+    "customerPhone": { "type": "string" },
+    "customerAddress": { "type": "string" },
+    "paymentMethod": {
+      "type": "string",
+      "enum": ["cash", "card", "online", "split", "credit"]
+    },
+    "cardLast4": { "type": "string" },
+    "cardRef": { "type": "string" },
+    "tenderedAmountCents": { "type": "integer" },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["name", "quantity", "unitPriceCents", "discountCents", "totalCents"],
+        "properties": {
+          "name": { "type": "string" },
+          "sku": { "type": "string" },
+          "sourceTicketNumber": { "type": "string" },
+          "assignedEmployeeName": { "type": "string" },
+          "quantity": { "type": "integer", "minimum": 1 },
+          "unitPriceCents": { "type": "integer" },
+          "discountCents": { "type": "integer" },
+          "totalCents": { "type": "integer" }
+        }
+      }
+    },
+    "subtotalCents": { "type": "integer" },
+    "discountCents": { "type": "integer" },
+    "taxCents": { "type": "integer" },
+    "totalCents": { "type": "integer" },
+    "vatRatePercent": { "type": ["number", "null"] },
+    "amountInWords": { "type": "string" },
+    "notes": { "type": "string" },
+    "warrantyText": { "type": "string" },
+    "showBankDetails": { "type": "boolean" },
+    "bankName": { "type": "string" },
+    "bankBranch": { "type": "string" },
+    "accountName": { "type": "string" },
+    "accountNumber": { "type": "string" },
+    "shopTradingName": { "type": "string" },
+    "shopLegalName": { "type": "string" },
+    "shopEmail": { "type": "string" },
+    "shopWebsite": { "type": "string" },
+    "shopBusinessRegNo": { "type": "string" },
+    "shopVatNo": { "type": "string" },
+    "shopIsVatRegistered": { "type": "boolean" },
+    "shopAddressLines": { "type": "array", "items": { "type": "string" } },
+    "shopPrimaryPhone": { "type": "string" },
+    "shopSecondaryPhone": { "type": "string" }
+  }
+}

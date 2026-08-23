@@ -12,12 +12,17 @@ use serde_json::json;
 use tower::ServiceExt;
 
 fn sample_receipt_data() -> serde_json::Value {
+    // Field-for-field what jana2u-pos's `billing::service::print_payload::
+    // build_thermal_receipt_data` sends — kept in step with
+    // thermal-receipt.schema.json, which now rejects incomplete payloads.
     json!({
         "paperWidthMm": 80,
         "invoiceNumber": "INV-0001",
         "formattedDate": "17 Aug 2026",
         "formattedTime": "14:32",
         "cashierName": "Jane Doe",
+        "customerName": "",
+        "customerPhone": "",
         "items": [
             {"name": "Widget", "quantity": 2, "unitPriceCents": 999, "discountCents": 0, "totalCents": 1998},
             {"name": "Gadget", "quantity": 1, "unitPriceCents": 1999, "discountCents": 0, "totalCents": 1999},
@@ -29,6 +34,14 @@ fn sample_receipt_data() -> serde_json::Value {
         "paymentMethod": "cash",
         "tenderedAmountCents": 4000,
         "changeDueCents": 3,
+        "isCredit": false,
+        "warrantyText": "",
+        "footerText": "Thank you for your business!",
+        "shopTradingName": "TechFix Repairs",
+        "shopLegalName": "TechFix Repairs (Pvt) Ltd",
+        "shopAddressLines": ["123 Galle Road", "Colombo 04"],
+        "shopPrimaryPhone": "",
+        "shopSecondaryPhone": "",
     })
 }
 
@@ -185,15 +198,24 @@ async fn render_a4_invoice_returns_pdf_and_records_document() {
         .await
         .expect("a4-invoice template should be synced from disk by spawn_app");
 
+    // Field-for-field what jana2u-pos's `billing::service::print_payload::
+    // build_a4_invoice_data` sends — kept in step with
+    // a4-invoice.schema.json, which now rejects incomplete payloads.
     let body = json!({
         "invoiceNumber": "INV-0001",
         "formattedDate": "17 Aug 2026",
         "formattedTime": "14:32",
+        "dueDate": "",
         "cashierName": "Jane Doe",
         "status": "paid",
         "isCredit": false,
+        "copyDesignation": "ORIGINAL — CUSTOMER COPY",
+        "isDuplicate": false,
         "customerName": "John Doe",
+        "customerPhone": "",
+        "customerAddress": "",
         "paymentMethod": "cash",
+        "cardLast4": "",
         "tenderedAmountCents": 4000,
         "items": [
             {"name": "Widget", "quantity": 2, "unitPriceCents": 999, "discountCents": 0, "totalCents": 1998},
@@ -203,6 +225,23 @@ async fn render_a4_invoice_returns_pdf_and_records_document() {
         "taxCents": 0,
         "totalCents": 1998,
         "amountInWords": "Nineteen Rupees Ninety-Eight Cents Only",
+        "notes": "",
+        "warrantyText": "",
+        "showBankDetails": false,
+        "bankName": "",
+        "bankBranch": "",
+        "accountName": "",
+        "accountNumber": "",
+        "shopTradingName": "TechFix Repairs",
+        "shopLegalName": "TechFix Repairs (Pvt) Ltd",
+        "shopEmail": "",
+        "shopWebsite": "",
+        "shopBusinessRegNo": "",
+        "shopVatNo": "",
+        "shopIsVatRegistered": false,
+        "shopAddressLines": ["123 Galle Road", "Colombo 04"],
+        "shopPrimaryPhone": "",
+        "shopSecondaryPhone": "",
     });
 
     let response = app
@@ -465,4 +504,122 @@ async fn render_sticker_with_missing_field_returns_422() {
     )
     .unwrap();
     assert_eq!(json["code"], "RENDER_VALIDATION_FAILED");
+}
+
+// The schema-sidecar contract: a payload missing a *required* field is
+// rejected before Typst ever runs, naming the field — this used to be a
+// compile error (or worse, silently blank output) surfacing from inside the
+// template.
+#[tokio::test]
+async fn render_missing_required_field_is_rejected_by_schema_before_compile() {
+    let app = common::spawn_app().await;
+
+    let template_key: String = sqlx::query_scalar("SELECT key FROM templates WHERE name = ?")
+        .bind("thermal-receipt")
+        .fetch_one(&app.db)
+        .await
+        .expect("thermal-receipt template should be synced from disk by spawn_app");
+
+    let mut body = sample_receipt_data();
+    body.as_object_mut().unwrap().remove("isCredit");
+
+    let response = app
+        .router
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/render/{template_key}"))
+                .header("content-type", "application/json")
+                .header("X-Internal-Api-Key", &app.config.internal_api_key)
+                .body(Body::from(body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    let json: serde_json::Value = serde_json::from_slice(
+        &axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(json["code"], "RENDER_VALIDATION_FAILED");
+    let message = json["message"].as_str().unwrap();
+    assert!(
+        message.contains("isCredit"),
+        "rejection should name the missing field, got: {message}"
+    );
+}
+
+// A mistyped field (string where the schema says integer) is rejected the
+// same way as a missing one.
+#[tokio::test]
+async fn render_mistyped_field_is_rejected_by_schema() {
+    let app = common::spawn_app().await;
+
+    let template_key: String = sqlx::query_scalar("SELECT key FROM templates WHERE name = ?")
+        .bind("thermal-receipt")
+        .fetch_one(&app.db)
+        .await
+        .expect("thermal-receipt template should be synced from disk by spawn_app");
+
+    let mut body = sample_receipt_data();
+    body["totalCents"] = json!("3997");
+
+    let response = app
+        .router
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/render/{template_key}"))
+                .header("content-type", "application/json")
+                .header("X-Internal-Api-Key", &app.config.internal_api_key)
+                .body(Body::from(body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    let json: serde_json::Value = serde_json::from_slice(
+        &axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(json["code"], "RENDER_VALIDATION_FAILED");
+}
+
+// Unknown fields are deliberately allowed (`additionalProperties: true`) so
+// an integrator can carry extra context in its payloads without the schema
+// rejecting it — only required/typed fields are policed.
+#[tokio::test]
+async fn render_with_unknown_extra_field_still_succeeds() {
+    let app = common::spawn_app().await;
+
+    let template_key: String = sqlx::query_scalar("SELECT key FROM templates WHERE name = ?")
+        .bind("thermal-receipt")
+        .fetch_one(&app.db)
+        .await
+        .expect("thermal-receipt template should be synced from disk by spawn_app");
+
+    let mut body = sample_receipt_data();
+    body["futureField"] = json!({"anything": true});
+
+    let response = app
+        .router
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/render/{template_key}"))
+                .header("content-type", "application/json")
+                .header("X-Internal-Api-Key", &app.config.internal_api_key)
+                .body(Body::from(body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
 }

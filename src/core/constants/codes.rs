@@ -17,6 +17,10 @@ pub const PDF_EXPORT_FAILED: &str = "PDF_EXPORT_FAILED";
 // Documents (see `modules::documents::service`).
 pub const DOCUMENT_NOT_FOUND: &str = "DOCUMENT_NOT_FOUND";
 
+// Stored template data (see `modules::template_data::service`) — the
+// per-template shared/static JSON blobs merged into render payloads.
+pub const TEMPLATE_DATA_NOT_FOUND: &str = "TEMPLATE_DATA_NOT_FOUND";
+
 // Barcodes & QR codes (see `modules::barcodes::service` and `modules::qrcodes::service`).
 pub const BARCODE_GENERATION_FAILED: &str = "BARCODE_GENERATION_FAILED";
 pub const QR_GENERATION_FAILED: &str = "QR_GENERATION_FAILED";

@@ -1,9 +1,11 @@
 // Feature modules, one per concern: `render` (the render endpoint itself),
-// `templates` (template metadata), `documents` (rendered-document records).
+// `templates` (template metadata), `documents` (rendered-document records),
+// `template_data` (per-template stored blobs merged into render payloads).
 // Each follows the same `routes.rs -> service -> repository` layering — see
 // each module's own `mod.rs` for its specific visibility rules.
 pub mod barcodes;
 pub mod documents;
 pub mod qrcodes;
 pub mod render;
+pub mod template_data;
 pub mod templates;

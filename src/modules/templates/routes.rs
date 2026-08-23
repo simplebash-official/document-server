@@ -1,5 +1,9 @@
 // HTTP layer for the templates module. `GET /` (list) and `GET /{key}`
-// (single template's metadata/data-contract).
+// (single template's metadata/data-contract), plus `POST /sync` — the
+// runtime disk re-sync that lets a new or edited `.typ` go live without a
+// process restart.
+
+use std::sync::Arc;
 
 use axum::{
     Json,
@@ -14,9 +18,10 @@ use crate::{
     core::{
         constants::modules,
         error::AppResult,
+        middleware::auth::InternalCaller,
         response::{ApiResponse, ErrorResponse},
     },
-    domain::templates::{Template, TemplateType, TemplatesResponse},
+    domain::templates::{SyncTemplatesResponse, Template, TemplateType, TemplatesResponse},
     modules::templates::service,
 };
 
@@ -28,6 +33,7 @@ pub fn router() -> OpenApiRouter<AppState> {
     OpenApiRouter::new()
         .routes(routes!(list_templates))
         .routes(routes!(get_template))
+        .routes(routes!(sync_templates))
 }
 
 // ============================================================================
@@ -78,5 +84,46 @@ async fn get_template(
     Ok(Json(ApiResponse::success(
         template,
         "Template retrieved successfully",
+    )))
+}
+
+// ============================================================================
+// Sync
+// ============================================================================
+
+/// Re-syncs templates from disk without a restart: rebuilds the render
+/// engine, upserts metadata for every `.typ` found, and deactivates rows
+/// whose file disappeared (never deletes — keys are stable and historical
+/// documents reference them). Internal-caller-gated like `render`, since it
+/// swaps the engine every caller of this service depends on.
+#[utoipa::path(
+    post,
+    path = "/sync",
+    tag = modules::TEMPLATES,
+    responses(
+        (status = 200, description = "Templates re-synced from disk", body = ApiResponse<SyncTemplatesResponse>),
+        (status = 401, description = "Missing or invalid X-Internal-Api-Key header", body = ErrorResponse),
+        (status = 500, description = "Templates directory unreadable or database failure", body = ErrorResponse),
+    ),
+    security(("internalApiKey" = []))
+)]
+async fn sync_templates(
+    _internal: InternalCaller,
+    State(state): State<AppState>,
+) -> AppResult<Json<ApiResponse<SyncTemplatesResponse>>> {
+    let (engine, summary) = service::resync_from_disk(
+        &state.db,
+        &state.config.templates_dir,
+        &state.config.fonts_dir,
+    )
+    .await?;
+
+    // Swapped only after the whole sync succeeded — a failed warm-up leaves
+    // the previous engine serving untouched.
+    state.render.store(Arc::new(engine));
+
+    Ok(Json(ApiResponse::success(
+        summary,
+        "Templates re-synced from disk",
     )))
 }
