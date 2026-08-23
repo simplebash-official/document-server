@@ -71,12 +71,11 @@ pub(crate) async fn delete_by_template_and_key(
     template_name: &str,
     data_key: &str,
 ) -> AppResult<bool> {
-    let result =
-        sqlx::query("DELETE FROM template_data WHERE template_name = ? AND data_key = ?")
-            .bind(template_name)
-            .bind(data_key)
-            .execute(db)
-            .await?;
+    let result = sqlx::query("DELETE FROM template_data WHERE template_name = ? AND data_key = ?")
+        .bind(template_name)
+        .bind(data_key)
+        .execute(db)
+        .await?;
 
     Ok(result.rows_affected() > 0)
 }

@@ -1,0 +1,23 @@
+services:
+  document-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: jana2u/document-server:latest
+    container_name: document-server
+    restart: unless-stopped
+    ports:
+      - "8090:8090"
+    environment:
+      - PORT=8090
+      - INTERNAL_API_KEY=change-me-in-production
+      - DATABASE_URL=sqlite:///app/data/document_server.db
+      - RUST_LOG=document_server=info,tower_http=info,info
+    volumes:
+      - document_data:/app/data
+      # Uncomment to mount templates/fonts for live editing without image rebuild:
+      # - ./templates:/app/templates:ro
+      # - ./fonts:/app/fonts:ro
+
+volumes:
+  document_data:
