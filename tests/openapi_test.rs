@@ -86,6 +86,18 @@ async fn openapi_json_lists_all_module_paths() {
     ] {
         assert!(paths.contains_key(expected), "missing path: {expected}");
     }
+
+    // `/api/templates` carries both the open list (GET) and the
+    // internal-caller create (POST).
+    let templates_ops = paths["/api/templates"].as_object().unwrap();
+    assert!(
+        templates_ops.contains_key("get"),
+        "GET /api/templates missing"
+    );
+    assert!(
+        templates_ops.contains_key("post"),
+        "POST /api/templates (create) missing from the spec"
+    );
 }
 
 #[tokio::test]

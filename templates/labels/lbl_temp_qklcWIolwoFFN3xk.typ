@@ -1,4 +1,4 @@
-// Expected JSON input (POST /api/render/{sticker-template-key} body):
+// Product Sticker Label — expected JSON input (POST /api/render/{templateKey} body):
 // {
 //   "title": "string",      // product/repair name printed above the codes
 //   "reference": "string"   // encoded as both the Code128 barcode and the QR code payload

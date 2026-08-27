@@ -2,8 +2,24 @@
 
 ## Layout & discovery
 
-- `templates/documents/*.typ` — standard printable documents (a4-invoice, thermal-receipt, credit-note); `templates/labels/*.typ` — thermal stickers (`sticker`). A bare `.typ` at the top level would also be discovered as a `document`. Only these two subdirectory names carry meaning to the scanner (`clients::render::scan_templates`): anything else becomes a `document` too.
+- `templates/documents/*.typ` — standard printable documents; `templates/labels/*.typ` — thermal stickers. A bare `.typ` at the top level would also be discovered as a `document`. Only these two subdirectory names carry meaning to the scanner (`clients::render::scan_templates`): anything else becomes a `document` too.
 - `templates/lib/` is skipped by the scan — vendored Typst packages, never renderable templates.
+
+## Naming
+
+A template's filename stem **is** its identity (`templates.name`, and the scope key for
+stored `template-data` blobs). It is an opaque generated id, not a human word:
+`doc_temp_<nanoid>` for a `documents/` template, `lbl_temp_<nanoid>` for a `labels/` one
+(`core::id::generate_template_name`). `POST /api/templates` mints these; adding a
+template by hand means following the same convention (then `POST /api/templates/sync`).
+
+The **human name** of a template lives in its `<name>.schema.json` `title` field. The
+sync pass copies that `title` into the `templates.description` column, which is what
+`GET /api/templates` and integration clients read to tell templates apart. Seed
+templates today: `doc_temp_vEf0Y7jQHQj2rIuO` = "A4 Invoice",
+`doc_temp_4pz79z5iba7TcEIp` = "Thermal Receipt", `doc_temp_5DHl8hUQTX3oLBSR` =
+"Credit Note", `doc_temp_6aCI1iKvb14RbEAb` = "Professional Modern Invoice",
+`lbl_temp_qklcWIolwoFFN3xk` = "Product Sticker Label".
 
 ## Sidecar conventions (per template)
 
@@ -16,4 +32,4 @@ Historical note: samples once lived in the `data_schema` DB column under a misle
 
 ## Barcode/QR (`templates/lib/`)
 
-`templates/labels/sticker.typ` draws a Code128 barcode via the vendored `tiaoma` package and a QR code via the vendored `zebra` package, both under `templates/lib/`. Both are **vendored copies**, not `@preview` imports resolved over the network — `RenderEngine` deliberately has no package resolver, only `with_file_system_resolver`, so a template can only ever `#import` something that's actually checked into this repo. This is the same determinism argument as bundling fonts explicitly: render output must not depend on package-registry availability or on which version happened to be cached on whichever machine runs the server. See `templates/lib/README.md` for exact provenance/upgrade instructions. Both packages use a WASM plugin (`plugin("...wasm")`) for their encoding math — that resolves through the same file-system resolver as any other asset, no special engine support was needed.
+The Product Sticker Label template (`templates/labels/lbl_temp_qklcWIolwoFFN3xk.typ`) draws a Code128 barcode via the vendored `tiaoma` package and a QR code via the vendored `zebra` package, both under `templates/lib/`. Both are **vendored copies**, not `@preview` imports resolved over the network — `RenderEngine` deliberately has no package resolver, only `with_file_system_resolver`, so a template can only ever `#import` something that's actually checked into this repo. This is the same determinism argument as bundling fonts explicitly: render output must not depend on package-registry availability or on which version happened to be cached on whichever machine runs the server. See `templates/lib/README.md` for exact provenance/upgrade instructions. Both packages use a WASM plugin (`plugin("...wasm")`) for their encoding math — that resolves through the same file-system resolver as any other asset, no special engine support was needed.

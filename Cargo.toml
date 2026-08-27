@@ -40,6 +40,12 @@ typst-layout = "0.15"
 jsonschema = "0.50"
 qrcode = { version = "0.14", default-features = false, features = ["svg"] }
 barcoders = { version = "2.0", default-features = false, features = ["svg", "std"] }
+# Fetches a render payload's `logoUrl` at render time — Typst compiles
+# offline and can't pull a URL itself, so the server downloads the image,
+# hands the bytes to that one compile, and drops them (see
+# `clients::http` + `modules::render::service`). `rustls-tls` keeps the
+# build free of a system OpenSSL dependency (matches the SQLite choice).
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "http2"] }
 
 [dev-dependencies]
 # Gives every `tests::common::spawn_app()` call its own throwaway SQLite

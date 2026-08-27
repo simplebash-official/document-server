@@ -33,20 +33,38 @@ async fn list_templates_returns_every_seeded_template_with_type_and_expected_dat
     .unwrap();
 
     let templates = json["data"]["templates"].as_array().unwrap();
-    let names: Vec<&str> = templates
+    // Names are opaque generated ids now (`doc_temp_…` / `lbl_temp_…`); a
+    // template is identified by its `description` (the schema `title`).
+    let mut descriptions: Vec<&str> = templates
         .iter()
-        .map(|t| t["name"].as_str().unwrap())
+        .map(|t| t["description"].as_str().unwrap())
         .collect();
+    descriptions.sort_unstable();
     assert_eq!(
-        names,
-        vec!["a4-invoice", "credit-note", "sticker", "thermal-receipt"]
+        descriptions,
+        vec![
+            "A4 Invoice",
+            "Credit Note",
+            "Product Sticker Label",
+            "Professional Modern Invoice",
+            "Thermal Receipt",
+        ]
     );
     assert!(templates.iter().all(|t| t["isActive"] == true));
+    assert!(templates.iter().all(|t| {
+        let name = t["name"].as_str().unwrap();
+        name.starts_with("doc_temp_") || name.starts_with("lbl_temp_")
+    }));
 
-    let invoice_tpl = templates
-        .iter()
-        .find(|t| t["name"] == "a4-invoice")
-        .unwrap();
+    let by_desc = |d: &str| -> serde_json::Value {
+        templates
+            .iter()
+            .find(|t| t["description"] == d)
+            .unwrap()
+            .clone()
+    };
+
+    let invoice_tpl = by_desc("A4 Invoice");
     assert_eq!(invoice_tpl["type"], "document");
     assert_eq!(invoice_tpl["data"]["invoiceNumber"], "INV-000123");
     assert!(invoice_tpl["data"]["items"].is_array());
@@ -57,26 +75,26 @@ async fn list_templates_returns_every_seeded_template_with_type_and_expected_dat
     assert!(required.iter().any(|r| r == "invoiceNumber"));
     assert!(required.iter().any(|r| r == "totalCents"));
 
-    let credit_note_tpl = templates
-        .iter()
-        .find(|t| t["name"] == "credit-note")
-        .unwrap();
+    let credit_note_tpl = by_desc("Credit Note");
     assert_eq!(credit_note_tpl["type"], "document");
     assert_eq!(credit_note_tpl["data"]["creditNoteNumber"], "CN-000042");
     assert!(credit_note_tpl["data"]["items"].is_array());
     assert_eq!(credit_note_tpl["data"]["refundCashCents"], 700000);
 
-    let receipt_tpl = templates
-        .iter()
-        .find(|t| t["name"] == "thermal-receipt")
-        .unwrap();
+    let receipt_tpl = by_desc("Thermal Receipt");
     assert_eq!(receipt_tpl["type"], "document");
     assert_eq!(receipt_tpl["data"]["invoiceNumber"], "INV-000123");
     assert!(receipt_tpl["data"]["items"].is_array());
     assert_eq!(receipt_tpl["data"]["totalCents"], 1100000);
     assert_eq!(receipt_tpl["data"]["paperWidthMm"], 80);
 
-    let sticker_tpl = templates.iter().find(|t| t["name"] == "sticker").unwrap();
+    let modern_tpl = by_desc("Professional Modern Invoice");
+    assert_eq!(modern_tpl["type"], "document");
+    assert!(modern_tpl["data"]["items"].is_array());
+    let required = modern_tpl["dataSchema"]["required"].as_array().unwrap();
+    assert!(required.iter().any(|r| r == "businessName"));
+
+    let sticker_tpl = by_desc("Product Sticker Label");
     assert_eq!(sticker_tpl["type"], "label");
     assert_eq!(sticker_tpl["data"]["title"], "USB-C Cable");
     assert_eq!(sticker_tpl["data"]["reference"], "SKU-00042");
@@ -111,13 +129,22 @@ async fn list_templates_filters_by_type() {
     .unwrap();
 
     let templates = json["data"]["templates"].as_array().unwrap();
-    assert_eq!(templates.len(), 3);
-    let names: Vec<&str> = templates
-        .iter()
-        .map(|t| t["name"].as_str().unwrap())
-        .collect();
-    assert_eq!(names, vec!["a4-invoice", "credit-note", "thermal-receipt"]);
+    assert_eq!(templates.len(), 4);
     assert!(templates.iter().all(|t| t["type"] == "document"));
+    let mut descriptions: Vec<&str> = templates
+        .iter()
+        .map(|t| t["description"].as_str().unwrap())
+        .collect();
+    descriptions.sort_unstable();
+    assert_eq!(
+        descriptions,
+        vec![
+            "A4 Invoice",
+            "Credit Note",
+            "Professional Modern Invoice",
+            "Thermal Receipt",
+        ]
+    );
 
     // Filter by type=label
     let response = app
@@ -141,7 +168,13 @@ async fn list_templates_filters_by_type() {
 
     let templates = json["data"]["templates"].as_array().unwrap();
     assert_eq!(templates.len(), 1);
-    assert_eq!(templates[0]["name"], "sticker");
+    assert_eq!(templates[0]["description"], "Product Sticker Label");
+    assert!(
+        templates[0]["name"]
+            .as_str()
+            .unwrap()
+            .starts_with("lbl_temp_")
+    );
     assert_eq!(templates[0]["type"], "label");
     assert_eq!(templates[0]["data"]["reference"], "SKU-00042");
 }
@@ -150,8 +183,8 @@ async fn list_templates_filters_by_type() {
 async fn get_template_by_key_returns_that_template_with_data() {
     let app = common::spawn_app().await;
 
-    let sticker_key: String = sqlx::query_scalar("SELECT key FROM templates WHERE name = ?")
-        .bind("sticker")
+    let sticker_key: String = sqlx::query_scalar("SELECT key FROM templates WHERE description = ?")
+        .bind("Product Sticker Label")
         .fetch_one(&app.db)
         .await
         .expect("sticker template should be synced from disk by spawn_app");
@@ -176,7 +209,13 @@ async fn get_template_by_key_returns_that_template_with_data() {
     .unwrap();
 
     assert_eq!(json["data"]["key"], sticker_key);
-    assert_eq!(json["data"]["name"], "sticker");
+    assert_eq!(json["data"]["description"], "Product Sticker Label");
+    assert!(
+        json["data"]["name"]
+            .as_str()
+            .unwrap()
+            .starts_with("lbl_temp_")
+    );
     assert_eq!(json["data"]["type"], "label");
     assert_eq!(json["data"]["data"]["title"], "USB-C Cable");
     assert_eq!(json["data"]["data"]["reference"], "SKU-00042");
@@ -266,7 +305,7 @@ async fn sync_deactivates_templates_removed_from_disk() {
             .unwrap(),
     )
     .unwrap();
-    assert_eq!(json["data"]["syncedCount"], 4);
+    assert_eq!(json["data"]["syncedCount"], 5);
     assert_eq!(json["data"]["deactivatedCount"], 1);
     let names: Vec<&str> = json["data"]["templates"]
         .as_array()
@@ -274,9 +313,11 @@ async fn sync_deactivates_templates_removed_from_disk() {
         .iter()
         .map(|v| v.as_str().unwrap())
         .collect();
-    assert_eq!(
-        names,
-        vec!["a4-invoice", "credit-note", "sticker", "thermal-receipt"]
+    assert_eq!(names.len(), 5);
+    assert!(
+        names
+            .iter()
+            .all(|n| n.starts_with("doc_temp_") || n.starts_with("lbl_temp_"))
     );
 
     // The ghost is deactivated but its row survives; real templates stay active.
@@ -291,7 +332,7 @@ async fn sync_deactivates_templates_removed_from_disk() {
             .fetch_one(&app.db)
             .await
             .unwrap();
-    assert_eq!(active_count, 4);
+    assert_eq!(active_count, 5);
 }
 
 // The point of the sync endpoint: a `.typ` dropped into the templates dir
@@ -300,7 +341,7 @@ async fn sync_deactivates_templates_removed_from_disk() {
 #[tokio::test]
 async fn sync_picks_up_new_template_and_renders_it_without_restart() {
     let templates_root = tempfile::tempdir().expect("create temp templates root");
-    copy_dir_recursive(std::path::Path::new("templates"), templates_root.path())
+    common::copy_dir_recursive(std::path::Path::new("templates"), templates_root.path())
         .expect("copy seed templates into temp dir");
 
     let app = common::spawn_app_with_templates_dir(
@@ -335,7 +376,7 @@ async fn sync_picks_up_new_template_and_renders_it_without_restart() {
             .unwrap(),
     )
     .unwrap();
-    assert_eq!(json["data"]["syncedCount"], 5);
+    assert_eq!(json["data"]["syncedCount"], 6);
 
     let hot_key: String = sqlx::query_scalar("SELECT key FROM templates WHERE name = 'hot-add'")
         .fetch_one(&app.db)
@@ -398,15 +439,199 @@ async fn sync_picks_up_new_template_and_renders_it_without_restart() {
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
 }
 
-fn copy_dir_recursive(src: &std::path::Path, dst: &std::path::Path) -> std::io::Result<()> {
-    std::fs::create_dir_all(dst)?;
-    for entry in std::fs::read_dir(src)? {
-        let entry = entry?;
-        if entry.file_type()?.is_dir() {
-            copy_dir_recursive(&entry.path(), &dst.join(entry.file_name()))?;
-        } else {
-            std::fs::copy(entry.path(), dst.join(entry.file_name()))?;
-        }
+// ============================================================================
+// Create (`POST /api/templates`)
+// ============================================================================
+
+/// A `TestApp` whose templates dir is a writable copy of the seed tree, so
+/// `POST /api/templates` can drop files without touching this repo.
+async fn spawn_with_writable_templates() -> (common::TestApp, tempfile::TempDir) {
+    let root = tempfile::tempdir().expect("create temp templates root");
+    common::copy_dir_recursive(std::path::Path::new("templates"), root.path())
+        .expect("copy seed templates into temp dir");
+    let app =
+        common::spawn_app_with_templates_dir(root.path().to_str().expect("utf-8 temp path")).await;
+    (app, root)
+}
+
+fn post_create(api_key: Option<&str>, body: serde_json::Value) -> Request<Body> {
+    let mut builder = Request::builder()
+        .method("POST")
+        .uri("/api/templates")
+        .header("content-type", "application/json");
+    if let Some(key) = api_key {
+        builder = builder.header("X-Internal-Api-Key", key);
     }
-    Ok(())
+    builder.body(Body::from(body.to_string())).unwrap()
+}
+
+async fn body_json(response: axum::response::Response) -> serde_json::Value {
+    serde_json::from_slice(
+        &axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap()
+}
+
+#[tokio::test]
+async fn create_template_requires_internal_api_key() {
+    let (app, _root) = spawn_with_writable_templates().await;
+    let response = app
+        .router
+        .oneshot(post_create(None, serde_json::json!({"source": "= Hi"})))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn create_template_writes_a_document_and_renders_it() {
+    let (app, root) = spawn_with_writable_templates().await;
+
+    let source = "#let data = sys.inputs\n= Invoice #data.at(\"ref\", default: \"\")\n";
+    let response = app
+        .router
+        .clone()
+        .oneshot(post_create(
+            Some(&app.config.internal_api_key),
+            serde_json::json!({
+                "type": "document",
+                "source": source,
+                "schema": {
+                    "$schema": "http://json-schema.org/draft-07/schema#",
+                    "title": "Custom Report",
+                    "type": "object",
+                    "additionalProperties": true,
+                    "required": ["ref"],
+                    "properties": { "ref": { "type": "string" } }
+                },
+                "sample": { "ref": "R-1" }
+            }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let json = body_json(response).await;
+    let key = json["data"]["key"].as_str().unwrap().to_string();
+    let name = json["data"]["name"].as_str().unwrap().to_string();
+    assert!(name.starts_with("doc_temp_"), "got name {name}");
+    assert_eq!(json["data"]["description"], "Custom Report");
+    assert_eq!(json["data"]["isActive"], true);
+
+    // Files landed in documents/.
+    assert!(root.path().join(format!("documents/{name}.typ")).exists());
+    assert!(
+        root.path()
+            .join(format!("documents/{name}.schema.json"))
+            .exists()
+    );
+
+    // And it renders on the very next request — no restart.
+    let response = app
+        .router
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/render/{key}"))
+                .header("content-type", "application/json")
+                .header("X-Internal-Api-Key", &app.config.internal_api_key)
+                .body(Body::from(serde_json::json!({"ref": "R-9"}).to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let pdf = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert!(pdf.starts_with(b"%PDF-"));
+}
+
+#[tokio::test]
+async fn create_template_writes_a_label() {
+    let (app, root) = spawn_with_writable_templates().await;
+    let response = app
+        .router
+        .oneshot(post_create(
+            Some(&app.config.internal_api_key),
+            serde_json::json!({ "type": "label", "source": "= Label\n" }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let json = body_json(response).await;
+    let name = json["data"]["name"].as_str().unwrap().to_string();
+    assert!(name.starts_with("lbl_temp_"), "got name {name}");
+    assert_eq!(json["data"]["type"], "label");
+    assert!(root.path().join(format!("labels/{name}.typ")).exists());
+}
+
+#[tokio::test]
+async fn create_template_rejects_empty_source() {
+    let (app, _root) = spawn_with_writable_templates().await;
+    let response = app
+        .router
+        .oneshot(post_create(
+            Some(&app.config.internal_api_key),
+            serde_json::json!({ "source": "   " }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(body_json(response).await["code"], "TEMPLATE_CREATE_FAILED");
+}
+
+#[tokio::test]
+async fn create_template_rejects_invalid_schema() {
+    let (app, _root) = spawn_with_writable_templates().await;
+    let response = app
+        .router
+        .oneshot(post_create(
+            Some(&app.config.internal_api_key),
+            serde_json::json!({
+                "source": "= Hi\n",
+                "schema": { "type": "not-a-real-type" }
+            }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(body_json(response).await["code"], "TEMPLATE_CREATE_FAILED");
+}
+
+#[tokio::test]
+async fn create_template_that_fails_to_compile_is_rejected_and_rolled_back() {
+    let (app, root) = spawn_with_writable_templates().await;
+    let before: Vec<_> = std::fs::read_dir(root.path().join("documents"))
+        .unwrap()
+        .filter_map(Result::ok)
+        .map(|e| e.file_name())
+        .collect();
+
+    let response = app
+        .router
+        .oneshot(post_create(
+            Some(&app.config.internal_api_key),
+            serde_json::json!({
+                "source": "#let x = ( // unterminated\n",
+                "sample": {}
+            }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(body_json(response).await["code"], "TEMPLATE_CREATE_FAILED");
+
+    // Nothing new left behind on disk.
+    let after: Vec<_> = std::fs::read_dir(root.path().join("documents"))
+        .unwrap()
+        .filter_map(Result::ok)
+        .map(|e| e.file_name())
+        .collect();
+    assert_eq!(
+        before.len(),
+        after.len(),
+        "rolled-back files should be gone"
+    );
 }

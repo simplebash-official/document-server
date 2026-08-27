@@ -13,6 +13,17 @@ pub fn generate_id(prefix: &str) -> String {
     format!("{}_{}", prefix, nanoid!(16))
 }
 
+/// Generates a template's stable on-disk identity (its `.typ` stem and
+/// `templates.name`): `<prefix>_temp_<nanoid16>`, e.g.
+/// `doc_temp_6aCI1iKvb14RbEAb`. `prefix` is `doc` for documents / `lbl` for
+/// labels — see `core::constants::prefixes::TEMPLATE_NAME_*`. Distinct from
+/// `generate_id`'s `<prefix>_<nanoid>` keys: the `_temp_` infix keeps a
+/// template *name* from being mistaken for a `doc_...` document *key*.
+pub fn generate_template_name(prefix: &str) -> String {
+    assert!(!prefix.is_empty(), "Template name prefix must not be empty");
+    format!("{}_temp_{}", prefix, nanoid!(16))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -22,5 +33,14 @@ mod tests {
         let key = generate_id("tpl");
         assert!(key.starts_with("tpl_"));
         assert_eq!(key.len(), 4 + 16);
+    }
+
+    #[test]
+    fn generate_template_name_creates_temp_infixed_name() {
+        let name = generate_template_name("doc");
+        assert!(name.starts_with("doc_temp_"));
+        assert_eq!(name.len(), "doc_temp_".len() + 16);
+        // Must not look like a `doc_<nanoid>` document key.
+        assert_ne!(name.split('_').count(), 2);
     }
 }

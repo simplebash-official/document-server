@@ -6,7 +6,7 @@
 // `billing::service::print_payload` builds a JSON payload matching the
 // contract below and POSTs it to `/api/render/{templateKey}`.
 //
-// Data contract (see thermal-receipt.json for a worked example):
+// Data contract (see this file's sibling .json for a worked example):
 //   paperWidthMm    number, 58 or 80 — the physical roll width. Mirrors the
 //                   frontend's PAPER_PROFILES.thermal58/thermal80 (D9: the
 //                   frontend already lets a cashier pick either width, so

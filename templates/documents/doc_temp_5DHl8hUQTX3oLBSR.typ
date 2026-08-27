@@ -6,12 +6,12 @@
 // never a mutation of the invoice itself — see backend CLAUDE.md's Credit
 // Note section). The backend's `billing::service::print_payload` builds a
 // JSON payload matching the contract below and POSTs it to
-// `/api/render/{templateKey}` (template key: "credit-note").
+// `/api/render/{templateKey}`.
 //
 // Visual conventions (palette, fonts, money formatting, panel/table style)
-// deliberately mirror a4-invoice.typ rather than inventing a new look.
+// deliberately mirror the A4 Invoice template rather than inventing a new look.
 //
-// Data contract (see credit-note.json for a worked example):
+// Data contract (see this file's sibling .json for a worked example):
 //   creditNoteNumber   string
 //   formattedDate      string
 //   cashierName        string

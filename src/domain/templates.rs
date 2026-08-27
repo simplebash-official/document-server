@@ -66,6 +66,31 @@ pub struct Template {
     pub updated_at: DateTime<Utc>,
 }
 
+/// Request body for `POST /api/templates` — publish a new template without
+/// shell access to the box. The server mints the template's identity
+/// (`<type>_temp_<nanoid>`), writes the `.typ` and its sidecars into
+/// `templates/documents/` or `templates/labels/`, and hot-reloads the engine.
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateTemplateRequest {
+    /// `document` (default) or `label` — decides the target subdirectory.
+    #[serde(default)]
+    pub r#type: TemplateType,
+    /// The full `.typ` source. Must read its input from `sys.inputs`, same
+    /// as every other template here.
+    pub source: String,
+    /// Optional JSON Schema (draft-07) input contract — stored as the
+    /// `<name>.schema.json` sidecar. Its `title` becomes the template's
+    /// human-readable `description`.
+    #[serde(default)]
+    pub schema: Option<serde_json::Value>,
+    /// Optional worked sample payload — stored as the `<name>.json` sidecar
+    /// and exposed as `Template.data`. When present it is also used to
+    /// smoke-compile the new template before it goes live.
+    #[serde(default)]
+    pub sample: Option<serde_json::Value>,
+}
+
 /// Response body for `GET /api/templates`.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]

@@ -119,6 +119,45 @@
             "description": "Compiles the `sticker` label template (50mm\u00d730mm thermal label) with a Code128 barcode and QR code encoding `reference` via `templates/lib/codes.typ`. Returns raw PDF bytes on success."
           },
           "response": []
+        },
+        {
+          "name": "Render Modern Invoice (logoUrl)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Internal-Api-Key",
+                "value": "{{internalApiKey}}",
+                "description": "Required \u2014 internal callers only."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/render/{{templateKey}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "render",
+                "{{templateKey}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"businessName\": \"Northwind Studio\",\n  \"businessAddress\": [\n    \"Office Address\",\n    \"Main Street 06/B\",\n    \"South Mountain, YK\"\n  ],\n  \"logoUrl\": \"https://example.com/logo.png\",\n  \"invoiceDate\": \"December 26, 2026\",\n  \"clientName\": \"Wagino Subianto\",\n  \"clientAddress\": [\n    \"Main Street, Your Loc.\",\n    \"Number 06/B\"\n  ],\n  \"currencySymbol\": \"$\",\n  \"items\": [\n    {\n      \"name\": \"Brand identity workshop\",\n      \"quantity\": 1,\n      \"unitPriceCents\": 2000\n    },\n    {\n      \"name\": \"Landing page design\",\n      \"quantity\": 2,\n      \"unitPriceCents\": 5000\n    }\n  ],\n  \"subtotalCents\": 12000,\n  \"discountRatePercent\": 5,\n  \"discountCents\": 600,\n  \"totalCents\": 11400\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Renders the Professional Modern Invoice. `logoUrl` is a remote image URL \u2014 the server downloads it (http(s), <= REMOTE_IMAGE_MAX_BYTES, image/* only), uses it for this one compile, and deletes it; nothing about the image is stored. Omit `logoUrl` to use the template's built-in vector mark. A bad URL \u2192 422 `REMOTE_IMAGE_FETCH_FAILED`. All amounts are integer cents. Resolve `{{templateKey}}` from `GET /api/templates` (description \"Professional Modern Invoice\")."
+          },
+          "response": []
         }
       ]
     },
@@ -199,6 +238,44 @@
               ]
             },
             "description": "Lists only label templates (`templates/labels/`)."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Template",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Internal-Api-Key",
+                "value": "{{internalApiKey}}",
+                "description": "Required \u2014 internal callers only."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/templates",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "templates"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"document\",\n  \"source\": \"#let data = sys.inputs\\n= Report #data.at(\\\"ref\\\", default: \\\"\\\")\\n\",\n  \"schema\": {\n    \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n    \"title\": \"Custom Report\",\n    \"type\": \"object\",\n    \"additionalProperties\": true,\n    \"required\": [\n      \"ref\"\n    ],\n    \"properties\": {\n      \"ref\": {\n        \"type\": \"string\"\n      }\n    }\n  },\n  \"sample\": {\n    \"ref\": \"R-1\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Publishes a new template without shell access. The server mints its identity (`doc_temp_<nanoid>` for a document, `lbl_temp_<nanoid>` for a label), writes the `.typ` plus optional `schema`/`sample` sidecars into `templates/documents|labels/`, re-syncs, smoke-compiles against `sample` when given, and hot-swaps the render engine \u2014 the template renders on the next request, no restart. Returns the created template (201). On failure the files are rolled back: 422 `TEMPLATE_CREATE_FAILED` (empty source, invalid schema, non-compiling template), 401 without the key."
           },
           "response": []
         },

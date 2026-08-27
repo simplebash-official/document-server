@@ -13,6 +13,12 @@ pub const INTERNAL_API_KEY_INVALID: &str = "INTERNAL_API_KEY_INVALID";
 pub const TEMPLATE_NOT_FOUND: &str = "TEMPLATE_NOT_FOUND";
 pub const RENDER_VALIDATION_FAILED: &str = "RENDER_VALIDATION_FAILED";
 pub const PDF_EXPORT_FAILED: &str = "PDF_EXPORT_FAILED";
+/// A render payload's `logoUrl` could not be downloaded (bad scheme,
+/// non-image response, too large, unreachable) — see `clients::http`.
+pub const REMOTE_IMAGE_FETCH_FAILED: &str = "REMOTE_IMAGE_FETCH_FAILED";
+
+// Template authoring (see `modules::templates::service::create_template`).
+pub const TEMPLATE_CREATE_FAILED: &str = "TEMPLATE_CREATE_FAILED";
 
 // Documents (see `modules::documents::service`).
 pub const DOCUMENT_NOT_FOUND: &str = "DOCUMENT_NOT_FOUND";

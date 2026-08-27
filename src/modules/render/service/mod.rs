@@ -4,16 +4,20 @@
 // `templates`/`documents` only through their `service` (never their
 // `repository`) — see spec §3.2's cross-module rule.
 
+use std::time::Duration;
+
 use sqlx::SqlitePool;
 
 use crate::{
-    clients::render::RenderEngine,
+    clients::{http, render::RenderEngine},
     core::{
+        config::Config,
         constants::codes,
         error::{AppError, AppResult},
     },
     modules::{
-        documents, render::repository::typst, render::repository::typst::TypstEngineError,
+        documents,
+        render::repository::{assets::StagedImage, typst, typst::TypstEngineError},
         template_data, templates,
     },
 };
@@ -77,6 +81,7 @@ pub(crate) fn validate_against_schema(
 pub(crate) async fn render_template(
     db: &SqlitePool,
     render: &RenderEngine,
+    cfg: &Config,
     template_key: &str,
     data: serde_json::Value,
 ) -> AppResult<(Vec<u8>, String)> {
@@ -90,48 +95,95 @@ pub(crate) async fn render_template(
     let compiled_input =
         template_data::service::merge_into_payload(db, &template.name, data.clone()).await?;
 
-    // Validation lives inside `compile_pdf`, so this path and the reprint
-    // path enforce the contract identically.
+    // Validation (and any `logoUrl` fetch) lives inside `compile_pdf`, so
+    // this path and the reprint path enforce the contract identically.
     let pdf_bytes = compile_pdf(
         render,
+        cfg,
         &template.name,
         template.data_schema.as_ref(),
         compiled_input,
-    )?;
+    )
+    .await?;
 
     documents::service::record_document(db, &template.key, data, pdf_bytes.len() as i64).await?;
 
     Ok((pdf_bytes, template.key))
 }
 
-/// Compiles `template_name` against `data` and translates any Typst
-/// failure into the right `AppError` — shared by `render_template` above
-/// and `documents::service::reprint_document` (Phase 3's
-/// `GET /api/documents/{key}/pdf`), so both go through the exact same
-/// compile-error -> HTTP-status mapping instead of duplicating it. Not
-/// `async`: `repository::typst::render_pdf` has no `.await` points of its
-/// own — Typst compilation is synchronous, CPU-bound work (see spec §9).
+/// Validates `data`, resolves any remote `logoUrl` in it, compiles
+/// `template_name` against the result, and translates any Typst failure into
+/// the right `AppError` — shared by `render_template` above and
+/// `documents::service::reprint_document` (`GET /api/documents/{key}/pdf`),
+/// so both go through the exact same contract enforcement and
+/// compile-error -> HTTP-status mapping instead of duplicating it.
+///
+/// `async` because a `logoUrl` payload triggers an outbound image download
+/// (see `clients::http`); the compile itself is still synchronous CPU work.
 ///
 /// Takes the template's `data_schema` alongside its name because validation
 /// lives with compilation (`render_template` and the reprint path each
 /// resolve their template themselves, and both must enforce the same
 /// contract). `None` skips validation — the no-schema-sidecar behavior.
-pub(crate) fn compile_pdf(
+pub(crate) async fn compile_pdf(
     render: &RenderEngine,
+    cfg: &Config,
     template_name: &str,
     data_schema: Option<&serde_json::Value>,
-    data: serde_json::Value,
+    mut data: serde_json::Value,
 ) -> AppResult<Vec<u8>> {
     if let Some(data_schema) = data_schema {
         validate_against_schema(data_schema, &data)?;
     }
 
-    typst::render_pdf(render, template_name, data).map_err(|err| match err {
+    let logo_url = data
+        .get("logoUrl")
+        .and_then(|value| value.as_str())
+        .filter(|url| !url.is_empty())
+        .map(str::to_owned);
+
+    if cfg.remote_image_fetch_enabled
+        && let Some(url) = logo_url
+    {
+        // Compile through a one-shot engine so the staged image never enters
+        // the shared engine's unbounded file cache.
+        let rel_path = render.template_rel_path(template_name).ok_or_else(|| {
+            AppError::internal(format!("no file path known for template '{template_name}'"))
+        })?;
+        let rel_path = rel_path.to_owned();
+
+        let image = http::fetch_image(
+            &url,
+            cfg.remote_image_max_bytes,
+            Duration::from_secs(cfg.remote_image_timeout_secs),
+        )
+        .await
+        .map_err(|err| {
+            AppError::unprocessable_entity(codes::REMOTE_IMAGE_FETCH_FAILED, err.to_string())
+        })?;
+
+        let staged =
+            StagedImage::write(std::path::Path::new(&cfg.templates_dir), &rel_path, &image)
+                .map_err(|err| {
+                    AppError::internal(format!("could not stage remote image: {err}"))
+                })?;
+
+        // Point the template at the local file. `staged` (and thus the file)
+        // is dropped when this block ends, whatever the compile result.
+        data["logo"] = serde_json::Value::String(staged.file_name.clone());
+        return typst::render_pdf_once(render, &rel_path, data).map_err(map_typst_error);
+    }
+
+    typst::render_pdf(render, template_name, data).map_err(map_typst_error)
+}
+
+fn map_typst_error(err: TypstEngineError) -> AppError {
+    match err {
         TypstEngineError::Compile(msg) => {
             AppError::unprocessable_entity(codes::RENDER_VALIDATION_FAILED, msg)
         }
         TypstEngineError::Export(msg) => {
             AppError::internal_with_code(msg, codes::PDF_EXPORT_FAILED)
         }
-    })
+    }
 }

@@ -14,11 +14,12 @@ use tower::ServiceExt;
 /// Renders the seed `sticker` template once and returns the `documents.key`
 /// it produced — the fixture every test in this file needs.
 async fn render_a_sticker(app: &common::TestApp) -> String {
-    let template_key: String = sqlx::query_scalar("SELECT key FROM templates WHERE name = ?")
-        .bind("sticker")
-        .fetch_one(&app.db)
-        .await
-        .expect("sticker template should be synced from disk by spawn_app");
+    let template_key: String =
+        sqlx::query_scalar("SELECT key FROM templates WHERE description = ?")
+            .bind("Product Sticker Label")
+            .fetch_one(&app.db)
+            .await
+            .expect("sticker template should be synced from disk by spawn_app");
 
     let body = json!({"title": "USB-C Cable", "reference": "SKU-00042"});
     let response = app

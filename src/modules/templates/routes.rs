@@ -8,6 +8,7 @@ use std::sync::Arc;
 use axum::{
     Json,
     extract::{Path, Query, State},
+    http::StatusCode,
 };
 use serde::Deserialize;
 use utoipa::{IntoParams, ToSchema};
@@ -21,7 +22,9 @@ use crate::{
         middleware::auth::InternalCaller,
         response::{ApiResponse, ErrorResponse},
     },
-    domain::templates::{SyncTemplatesResponse, Template, TemplateType, TemplatesResponse},
+    domain::templates::{
+        CreateTemplateRequest, SyncTemplatesResponse, Template, TemplateType, TemplatesResponse,
+    },
     modules::templates::service,
 };
 
@@ -31,7 +34,7 @@ use crate::{
 
 pub fn router() -> OpenApiRouter<AppState> {
     OpenApiRouter::new()
-        .routes(routes!(list_templates))
+        .routes(routes!(list_templates, create_template))
         .routes(routes!(get_template))
         .routes(routes!(sync_templates))
 }
@@ -66,6 +69,41 @@ async fn list_templates(
         response,
         "Templates retrieved successfully",
     )))
+}
+
+/// Publishes a new template from an API call instead of a shell session:
+/// the server mints its `<type>_temp_<nanoid>` identity, writes the `.typ`
+/// (and any schema/sample sidecars) into `templates/documents|labels/`,
+/// re-syncs, and hot-swaps the engine — the new template renders on the
+/// very next request, no restart. Internal-caller-gated for the same reason
+/// as `/sync`: it rebuilds the engine every other caller depends on.
+#[utoipa::path(
+    post,
+    path = "/",
+    tag = modules::TEMPLATES,
+    request_body = CreateTemplateRequest,
+    responses(
+        (status = 201, description = "Template created and live", body = ApiResponse<Template>),
+        (status = 401, description = "Missing or invalid X-Internal-Api-Key header", body = ErrorResponse),
+        (status = 422, description = "Empty source, invalid schema, or the template does not compile", body = ErrorResponse),
+        (status = 500, description = "Could not write files or rebuild the engine", body = ErrorResponse),
+    ),
+    security(("internalApiKey" = []))
+)]
+async fn create_template(
+    _internal: InternalCaller,
+    State(state): State<AppState>,
+    Json(req): Json<CreateTemplateRequest>,
+) -> AppResult<(StatusCode, Json<ApiResponse<Template>>)> {
+    let (engine, template) = service::create_template(&state.db, &state.config, req).await?;
+
+    // Swap only after the whole create succeeded — same discipline as `/sync`.
+    state.render.store(Arc::new(engine));
+
+    Ok((
+        StatusCode::CREATED,
+        Json(ApiResponse::success(template, "Template created")),
+    ))
 }
 
 #[utoipa::path(get, path = "/{key}", tag = modules::TEMPLATES,

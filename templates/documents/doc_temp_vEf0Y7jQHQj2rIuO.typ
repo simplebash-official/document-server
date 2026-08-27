@@ -6,7 +6,7 @@
 // `billing::service::print_payload` builds a JSON payload matching the
 // contract below and POSTs it to `/api/render/{templateKey}`.
 //
-// Data contract (see a4-invoice.json for a worked example):
+// Data contract (see this file's sibling .json for a worked example):
 //   invoiceNumber, formattedDate, formattedTime   string
 //   dueDate         string (optional, credit sales only)
 //   cashierName     string
