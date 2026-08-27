@@ -3,4 +3,5 @@
 // one place that touches `typst`/`typst_pdf` types directly stays isolated,
 // same as every other module's `repository` isolates its one driver/
 // framework dependency.
+pub(crate) mod assets;
 pub(crate) mod typst;

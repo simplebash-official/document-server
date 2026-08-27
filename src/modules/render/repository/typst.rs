@@ -57,10 +57,28 @@ pub(crate) fn render_pdf(
     input: serde_json::Value,
 ) -> Result<Vec<u8>, TypstEngineError> {
     let dict = json_to_dict(input);
-    let warned = engine.compile(template_name, dict);
+    export_pdf(engine.compile(template_name, dict), template_name)
+}
 
+/// Like `render_pdf`, but compiles `main_rel_path` through a single-use
+/// engine (`RenderEngine::compile_once`) — used when the render staged a
+/// downloaded image on disk and that file must not pollute the shared
+/// engine's file cache.
+pub(crate) fn render_pdf_once(
+    engine: &RenderEngine,
+    main_rel_path: &str,
+    input: serde_json::Value,
+) -> Result<Vec<u8>, TypstEngineError> {
+    let dict = json_to_dict(input);
+    export_pdf(engine.compile_once(main_rel_path, dict), main_rel_path)
+}
+
+fn export_pdf(
+    warned: typst::diag::Warned<Result<typst_layout::PagedDocument, typst_as_lib::TypstAsLibError>>,
+    label: &str,
+) -> Result<Vec<u8>, TypstEngineError> {
     for warning in warned.warnings.iter() {
-        tracing::warn!(?warning, template = template_name, "typst compile warning");
+        tracing::warn!(?warning, template = label, "typst compile warning");
     }
 
     let doc = warned

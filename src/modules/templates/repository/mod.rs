@@ -58,13 +58,16 @@ pub(crate) async fn list_templates(
     }
 }
 
-/// Inserts a new `templates` row for `name` if none exists yet, or
-/// updates `type`/`data_schema`/`sample_data`/`is_active`/`updated_at` on
-/// conflict.
+/// Inserts a new `templates` row for `name` if none exists yet, or updates
+/// `type`/`description`/`data_schema`/`sample_data`/`is_active`/`updated_at`
+/// on conflict. `description` is the template's human label (the schema
+/// sidecar's `title`) — the only readable identifier now that `name` is an
+/// opaque generated id.
 pub(crate) async fn upsert_template_by_name(
     db: &SqlitePool,
     name: &str,
     template_type: TemplateType,
+    description: Option<&str>,
     data_schema: Option<&serde_json::Value>,
     sample_data: Option<&serde_json::Value>,
     is_active: bool,
@@ -72,18 +75,20 @@ pub(crate) async fn upsert_template_by_name(
     let now = Utc::now();
     let key = crate::core::id::generate_id(crate::core::constants::prefixes::TEMPLATE);
     let type_str = template_type.to_string();
+    let description = description.unwrap_or_default();
     let schema_str = data_schema.map(|v| v.to_string());
     let sample_str = sample_data.map(|v| v.to_string());
 
     Ok(sqlx::query_as::<_, TemplateRow>(
         "INSERT INTO templates (key, name, type, description, data_schema, sample_data, is_active, created_at, updated_at)
-         VALUES (?, ?, ?, '', ?, ?, ?, ?, ?)
-         ON CONFLICT(name) DO UPDATE SET type = excluded.type, data_schema = excluded.data_schema, sample_data = excluded.sample_data, is_active = excluded.is_active, updated_at = excluded.updated_at
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(name) DO UPDATE SET type = excluded.type, description = excluded.description, data_schema = excluded.data_schema, sample_data = excluded.sample_data, is_active = excluded.is_active, updated_at = excluded.updated_at
          RETURNING *",
     )
     .bind(key)
     .bind(name)
     .bind(type_str)
+    .bind(description)
     .bind(schema_str)
     .bind(sample_str)
     .bind(is_active)

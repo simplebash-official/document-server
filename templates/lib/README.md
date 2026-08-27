@@ -1,6 +1,6 @@
 # Vendored Typst packages
 
-`tiaoma/` and `zebra/` are vendored copies of two MIT-licensed Typst Universe packages (`@preview/tiaoma:0.3.0` and `@preview/zebra:0.1.0`), used by `../sticker.typ` for barcode/QR generation:
+`tiaoma/` and `zebra/` are vendored copies of two MIT-licensed Typst Universe packages (`@preview/tiaoma:0.3.0` and `@preview/zebra:0.1.0`), used by the Product Sticker Label template (`../labels/lbl_temp_qklcWIolwoFFN3xk.typ`) for barcode/QR generation:
 
 - **`tiaoma`** — [Enter-tainer/zint-wasi](https://github.com/Enter-tainer/zint-wasi), Zint compiled to a WASM plugin. Used here for `code128(...)`.
 - **`zebra`** — [rojul/typst-zebra](https://github.com/rojul/typst-zebra), a WASM plugin for QR/Data Matrix encoding plus native-Typst path drawing. Used here for `qrcode(...)`.

@@ -21,6 +21,15 @@ pub struct Config {
     /// no other access control, so an accidentally-unset secret must fail
     /// startup, not silently boot wide open.
     pub internal_api_key: String,
+    /// Largest remote image (a render payload's `logoUrl`) the server will
+    /// download, in bytes. Default 5 MiB.
+    pub remote_image_max_bytes: usize,
+    /// Per-request timeout for that download, in seconds. Default 10.
+    pub remote_image_timeout_secs: u64,
+    /// Master switch for remote-image fetching. When `false`, a payload's
+    /// `logoUrl` is ignored and the template renders with its built-in
+    /// fallback. Default `true`.
+    pub remote_image_fetch_enabled: bool,
 }
 
 /// Why startup configuration failed to load. `main.rs` logs this and exits
@@ -65,6 +74,21 @@ impl Config {
         let internal_api_key =
             env::var("INTERNAL_API_KEY").map_err(|_| ConfigError::Missing("INTERNAL_API_KEY"))?;
 
+        let remote_image_max_bytes = env::var("REMOTE_IMAGE_MAX_BYTES")
+            .unwrap_or_else(|_| "5242880".to_string())
+            .parse::<usize>()
+            .map_err(|_| ConfigError::Invalid("REMOTE_IMAGE_MAX_BYTES"))?;
+
+        let remote_image_timeout_secs = env::var("REMOTE_IMAGE_TIMEOUT_SECS")
+            .unwrap_or_else(|_| "10".to_string())
+            .parse::<u64>()
+            .map_err(|_| ConfigError::Invalid("REMOTE_IMAGE_TIMEOUT_SECS"))?;
+
+        let remote_image_fetch_enabled = env::var("REMOTE_IMAGE_FETCH_ENABLED")
+            .unwrap_or_else(|_| "true".to_string())
+            .parse::<bool>()
+            .map_err(|_| ConfigError::Invalid("REMOTE_IMAGE_FETCH_ENABLED"))?;
+
         Ok(Self {
             database_url,
             port,
@@ -72,6 +96,9 @@ impl Config {
             fonts_dir,
             max_render_body_bytes,
             internal_api_key,
+            remote_image_max_bytes,
+            remote_image_timeout_secs,
+            remote_image_fetch_enabled,
         })
     }
 }

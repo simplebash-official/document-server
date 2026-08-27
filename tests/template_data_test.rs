@@ -28,6 +28,23 @@ async fn get_json(response: axum::response::Response) -> Value {
     .unwrap()
 }
 
+/// The Thermal Receipt seed template's generated name / key — resolved via
+/// the human label in its schema `title` (the `templates.description`
+/// column), since the on-disk name is now an opaque id.
+async fn tr_name(app: &common::TestApp) -> String {
+    sqlx::query_scalar("SELECT name FROM templates WHERE description = 'Thermal Receipt'")
+        .fetch_one(&app.db)
+        .await
+        .expect("Thermal Receipt template should be synced from disk")
+}
+
+async fn tr_key(app: &common::TestApp) -> String {
+    sqlx::query_scalar("SELECT key FROM templates WHERE description = 'Thermal Receipt'")
+        .fetch_one(&app.db)
+        .await
+        .expect("Thermal Receipt template should be synced from disk")
+}
+
 // A receipt payload that is schema-valid EXCEPT for the three fields listed
 // here as missing — the stored blob under test supplies exactly those.
 fn receipt_payload_missing(missing: &[&str]) -> Value {
@@ -82,11 +99,12 @@ async fn render_receipt(
 #[tokio::test]
 async fn template_data_routes_require_internal_api_key() {
     let app = common::spawn_app().await;
+    let tr = tr_name(&app).await;
 
     // PUT without a key
     let request = Request::builder()
         .method("PUT")
-        .uri("/api/template-data/thermal-receipt/shop")
+        .uri(format!("/api/template-data/{tr}/shop"))
         .header("content-type", "application/json")
         .body(Body::from(json!({}).to_string()))
         .unwrap();
@@ -99,7 +117,7 @@ async fn template_data_routes_require_internal_api_key() {
         .clone()
         .oneshot(
             Request::builder()
-                .uri("/api/template-data/thermal-receipt")
+                .uri(format!("/api/template-data/{tr}"))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -111,12 +129,13 @@ async fn template_data_routes_require_internal_api_key() {
 #[tokio::test]
 async fn set_get_list_delete_roundtrip() {
     let app = common::spawn_app().await;
+    let tr = tr_name(&app).await;
 
     let response = app
         .router
         .clone()
         .oneshot(put_data(
-            "thermal-receipt",
+            &tr,
             "shop",
             &app.config.internal_api_key,
             json!({"shopTradingName": "Stored Shop"}),
@@ -127,7 +146,7 @@ async fn set_get_list_delete_roundtrip() {
     let json = get_json(response).await;
     let key = json["data"]["key"].as_str().unwrap();
     assert!(key.starts_with("tdat_"));
-    assert_eq!(json["data"]["templateName"], "thermal-receipt");
+    assert_eq!(json["data"]["templateName"], tr);
     assert_eq!(json["data"]["dataKey"], "shop");
 
     // GET one
@@ -136,7 +155,7 @@ async fn set_get_list_delete_roundtrip() {
         .clone()
         .oneshot(
             Request::builder()
-                .uri("/api/template-data/thermal-receipt/shop")
+                .uri(format!("/api/template-data/{tr}/shop"))
                 .header("X-Internal-Api-Key", &app.config.internal_api_key)
                 .body(Body::empty())
                 .unwrap(),
@@ -154,7 +173,7 @@ async fn set_get_list_delete_roundtrip() {
         .router
         .clone()
         .oneshot(put_data(
-            "thermal-receipt",
+            &tr,
             "shop",
             &app.config.internal_api_key,
             json!({"shopTradingName": "Replaced Shop"}),
@@ -168,7 +187,7 @@ async fn set_get_list_delete_roundtrip() {
         .clone()
         .oneshot(
             Request::builder()
-                .uri("/api/template-data/thermal-receipt")
+                .uri(format!("/api/template-data/{tr}"))
                 .header("X-Internal-Api-Key", &app.config.internal_api_key)
                 .body(Body::empty())
                 .unwrap(),
@@ -189,7 +208,7 @@ async fn set_get_list_delete_roundtrip() {
         .oneshot(
             Request::builder()
                 .method("DELETE")
-                .uri("/api/template-data/thermal-receipt/shop")
+                .uri(format!("/api/template-data/{tr}/shop"))
                 .header("X-Internal-Api-Key", &app.config.internal_api_key)
                 .body(Body::empty())
                 .unwrap(),
@@ -208,7 +227,7 @@ async fn set_get_list_delete_roundtrip() {
         .oneshot(
             Request::builder()
                 .method("DELETE")
-                .uri("/api/template-data/thermal-receipt/shop")
+                .uri(format!("/api/template-data/{tr}/shop"))
                 .header("X-Internal-Api-Key", &app.config.internal_api_key)
                 .body(Body::empty())
                 .unwrap(),
@@ -246,12 +265,13 @@ async fn set_for_unknown_template_returns_404() {
 #[tokio::test]
 async fn stored_blob_supplies_required_fields_at_render_time() {
     let app = common::spawn_app().await;
+    let tr = tr_name(&app).await;
 
     let response = app
         .router
         .clone()
         .oneshot(put_data(
-            "thermal-receipt",
+            &tr,
             "defaults",
             &app.config.internal_api_key,
             json!({
@@ -264,11 +284,7 @@ async fn stored_blob_supplies_required_fields_at_render_time() {
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
 
-    let template_key: String =
-        sqlx::query_scalar("SELECT key FROM templates WHERE name = 'thermal-receipt'")
-            .fetch_one(&app.db)
-            .await
-            .unwrap();
+    let template_key = tr_key(&app).await;
 
     let body = receipt_payload_missing(&["isCredit", "shopTradingName"]);
     let response = render_receipt(&app, &template_key, &body).await;
@@ -289,12 +305,13 @@ async fn stored_blob_supplies_required_fields_at_render_time() {
 #[tokio::test]
 async fn request_payload_overrides_stored_blob() {
     let app = common::spawn_app().await;
+    let tr = tr_name(&app).await;
 
     let response = app
         .router
         .clone()
         .oneshot(put_data(
-            "thermal-receipt",
+            &tr,
             "bad-defaults",
             &app.config.internal_api_key,
             json!({"paymentMethod": "not-a-real-method"}),
@@ -303,11 +320,7 @@ async fn request_payload_overrides_stored_blob() {
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
 
-    let template_key: String =
-        sqlx::query_scalar("SELECT key FROM templates WHERE name = 'thermal-receipt'")
-            .fetch_one(&app.db)
-            .await
-            .unwrap();
+    let template_key = tr_key(&app).await;
 
     let body = receipt_payload_missing(&[]);
     let response = render_receipt(&app, &template_key, &body).await;
@@ -331,12 +344,13 @@ async fn request_payload_overrides_stored_blob() {
 #[tokio::test]
 async fn reprint_reapplies_current_stored_state() {
     let app = common::spawn_app().await;
+    let tr = tr_name(&app).await;
 
     let response = app
         .router
         .clone()
         .oneshot(put_data(
-            "thermal-receipt",
+            &tr,
             "defaults",
             &app.config.internal_api_key,
             json!({"isCredit": false}),
@@ -345,11 +359,7 @@ async fn reprint_reapplies_current_stored_state() {
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
 
-    let template_key: String =
-        sqlx::query_scalar("SELECT key FROM templates WHERE name = 'thermal-receipt'")
-            .fetch_one(&app.db)
-            .await
-            .unwrap();
+    let template_key = tr_key(&app).await;
 
     let body = receipt_payload_missing(&["isCredit"]);
     let response = render_receipt(&app, &template_key, &body).await;
@@ -384,7 +394,7 @@ async fn reprint_reapplies_current_stored_state() {
         .oneshot(
             Request::builder()
                 .method("DELETE")
-                .uri("/api/template-data/thermal-receipt/defaults")
+                .uri(format!("/api/template-data/{tr}/defaults"))
                 .header("X-Internal-Api-Key", &app.config.internal_api_key)
                 .body(Body::empty())
                 .unwrap(),

@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Credit Note",
-  "description": "Input contract for credit-note.typ — see that file's header comment for the authoritative field-by-field description and credit-note.json for a worked example.",
+  "description": "Input contract for the Credit Note template — see the .typ file's header comment for the authoritative field-by-field description and the sibling .json for a worked example.",
   "type": "object",
   "additionalProperties": true,
   "required": [

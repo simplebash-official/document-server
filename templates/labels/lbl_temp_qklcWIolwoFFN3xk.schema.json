@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Product Sticker Label",
-  "description": "Input contract for sticker.typ — a 50mm x 30mm label carrying the title text plus a Code128 barcode and QR code both encoding `reference`.",
+  "description": "Input contract for the Product Sticker Label template — a 50mm x 30mm label carrying the title text plus a Code128 barcode and QR code both encoding `reference`.",
   "type": "object",
   "additionalProperties": true,
   "required": ["title", "reference"],

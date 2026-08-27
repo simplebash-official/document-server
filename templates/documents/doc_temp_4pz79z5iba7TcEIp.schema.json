@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Thermal Receipt",
-  "description": "Input contract for thermal-receipt.typ — see that file's header comment for the authoritative field-by-field description and thermal-receipt.json for a worked example.",
+  "description": "Input contract for the Thermal Receipt template — see the .typ file's header comment for the authoritative field-by-field description and the sibling .json for a worked example.",
   "type": "object",
   "additionalProperties": true,
   "required": [

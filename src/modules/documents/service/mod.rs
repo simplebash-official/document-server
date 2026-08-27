@@ -7,6 +7,7 @@ use sqlx::SqlitePool;
 use crate::{
     clients::render::RenderEngine,
     core::{
+        config::Config,
         constants::{codes, prefixes},
         error::{AppError, AppResult},
         id::generate_id,
@@ -75,22 +76,26 @@ pub(crate) async fn get_document_by_key(db: &SqlitePool, key: &str) -> AppResult
 pub(crate) async fn reprint_document(
     db: &SqlitePool,
     render_engine: &RenderEngine,
+    cfg: &Config,
     key: &str,
 ) -> AppResult<Vec<u8>> {
     let document = get_document_by_key(db, key).await?;
     let template = templates::service::get_template_by_key(db, &document.template_key).await?;
 
     // The stored `data` is the original *request* payload (see
-    // `render_template`), so the stored-data merge re-applies here exactly
-    // as it did on the first render — updates to stored blobs flow into
-    // reprints without touching history.
+    // `render_template`), so the stored-data merge — and any `logoUrl`
+    // re-fetch inside `compile_pdf` — re-applies here exactly as it did on
+    // the first render. Updates to stored blobs (or to the remote image at
+    // that URL) flow into reprints without touching history.
     let compiled_input =
         template_data::service::merge_into_payload(db, &template.name, document.data).await?;
 
     render::service::compile_pdf(
         render_engine,
+        cfg,
         &template.name,
         template.data_schema.as_ref(),
         compiled_input,
     )
+    .await
 }

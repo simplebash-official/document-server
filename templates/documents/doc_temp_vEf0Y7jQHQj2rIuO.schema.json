@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "A4 Invoice",
-  "description": "Input contract for a4-invoice.typ — see that file's header comment for the authoritative field-by-field description and a4-invoice.json for a worked example.",
+  "description": "Input contract for the A4 Invoice template — see the .typ file's header comment for the authoritative field-by-field description and the sibling .json for a worked example.",
   "type": "object",
   "additionalProperties": true,
   "required": [

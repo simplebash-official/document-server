@@ -1,8 +1,8 @@
 // Full-stack: real SQLite (a throwaway per-test file via
 // `common::spawn_app`), real render engine. Exercises the whole render
-// pipeline end to end against the seed `templates/documents/a4-invoice.typ`,
-// `templates/documents/thermal-receipt.typ`, and `templates/labels/sticker.typ`
-// templates.
+// pipeline end to end against the seed templates (A4 Invoice, Thermal
+// Receipt, Credit Note, Product Sticker Label, Professional Modern Invoice),
+// resolved by their schema `title` since on-disk names are opaque ids now.
 
 mod common;
 
@@ -49,11 +49,12 @@ fn sample_receipt_data() -> serde_json::Value {
 async fn render_thermal_receipt_returns_pdf_and_records_document() {
     let app = common::spawn_app().await;
 
-    let template_key: String = sqlx::query_scalar("SELECT key FROM templates WHERE name = ?")
-        .bind("thermal-receipt")
-        .fetch_one(&app.db)
-        .await
-        .expect("thermal-receipt template should be synced from disk by spawn_app");
+    let template_key: String =
+        sqlx::query_scalar("SELECT key FROM templates WHERE description = ?")
+            .bind("Thermal Receipt")
+            .fetch_one(&app.db)
+            .await
+            .expect("thermal-receipt template should be synced from disk by spawn_app");
 
     let body = sample_receipt_data();
     let response = app
@@ -105,11 +106,12 @@ async fn render_thermal_receipt_returns_pdf_and_records_document() {
 async fn render_thermal_receipt_at_58mm_and_80mm_both_succeed() {
     let app = common::spawn_app().await;
 
-    let template_key: String = sqlx::query_scalar("SELECT key FROM templates WHERE name = ?")
-        .bind("thermal-receipt")
-        .fetch_one(&app.db)
-        .await
-        .expect("thermal-receipt template should be synced from disk by spawn_app");
+    let template_key: String =
+        sqlx::query_scalar("SELECT key FROM templates WHERE description = ?")
+            .bind("Thermal Receipt")
+            .fetch_one(&app.db)
+            .await
+            .expect("thermal-receipt template should be synced from disk by spawn_app");
 
     for width in [58, 80] {
         let mut body = sample_receipt_data();
@@ -142,11 +144,12 @@ async fn render_thermal_receipt_at_58mm_and_80mm_both_succeed() {
 async fn render_without_internal_api_key_header_returns_401() {
     let app = common::spawn_app().await;
 
-    let template_key: String = sqlx::query_scalar("SELECT key FROM templates WHERE name = ?")
-        .bind("thermal-receipt")
-        .fetch_one(&app.db)
-        .await
-        .expect("thermal-receipt template should be synced from disk by spawn_app");
+    let template_key: String =
+        sqlx::query_scalar("SELECT key FROM templates WHERE description = ?")
+            .bind("Thermal Receipt")
+            .fetch_one(&app.db)
+            .await
+            .expect("thermal-receipt template should be synced from disk by spawn_app");
 
     let response = app
         .router
@@ -192,11 +195,12 @@ async fn render_without_internal_api_key_header_returns_401() {
 async fn render_a4_invoice_returns_pdf_and_records_document() {
     let app = common::spawn_app().await;
 
-    let template_key: String = sqlx::query_scalar("SELECT key FROM templates WHERE name = ?")
-        .bind("a4-invoice")
-        .fetch_one(&app.db)
-        .await
-        .expect("a4-invoice template should be synced from disk by spawn_app");
+    let template_key: String =
+        sqlx::query_scalar("SELECT key FROM templates WHERE description = ?")
+            .bind("A4 Invoice")
+            .fetch_one(&app.db)
+            .await
+            .expect("a4-invoice template should be synced from disk by spawn_app");
 
     // Field-for-field what jana2u-pos's `billing::service::print_payload::
     // build_a4_invoice_data` sends — kept in step with
@@ -289,11 +293,12 @@ async fn render_a4_invoice_returns_pdf_and_records_document() {
 async fn render_credit_note_returns_pdf_and_records_document() {
     let app = common::spawn_app().await;
 
-    let template_key: String = sqlx::query_scalar("SELECT key FROM templates WHERE name = ?")
-        .bind("credit-note")
-        .fetch_one(&app.db)
-        .await
-        .expect("credit-note template should be synced from disk by spawn_app");
+    let template_key: String =
+        sqlx::query_scalar("SELECT key FROM templates WHERE description = ?")
+            .bind("Credit Note")
+            .fetch_one(&app.db)
+            .await
+            .expect("credit-note template should be synced from disk by spawn_app");
 
     let body = json!({
         "creditNoteNumber": "CN-000042",
@@ -391,11 +396,12 @@ async fn render_credit_note_returns_pdf_and_records_document() {
 async fn render_sticker_returns_pdf_and_records_document() {
     let app = common::spawn_app().await;
 
-    let template_key: String = sqlx::query_scalar("SELECT key FROM templates WHERE name = ?")
-        .bind("sticker")
-        .fetch_one(&app.db)
-        .await
-        .expect("sticker template should be synced from disk by spawn_app");
+    let template_key: String =
+        sqlx::query_scalar("SELECT key FROM templates WHERE description = ?")
+            .bind("Product Sticker Label")
+            .fetch_one(&app.db)
+            .await
+            .expect("sticker template should be synced from disk by spawn_app");
 
     let body = json!({
         "title": "USB-C Cable",
@@ -474,11 +480,12 @@ async fn render_unknown_template_returns_404() {
 async fn render_sticker_with_missing_field_returns_422() {
     let app = common::spawn_app().await;
 
-    let template_key: String = sqlx::query_scalar("SELECT key FROM templates WHERE name = ?")
-        .bind("sticker")
-        .fetch_one(&app.db)
-        .await
-        .expect("sticker template should be synced from disk by spawn_app");
+    let template_key: String =
+        sqlx::query_scalar("SELECT key FROM templates WHERE description = ?")
+            .bind("Product Sticker Label")
+            .fetch_one(&app.db)
+            .await
+            .expect("sticker template should be synced from disk by spawn_app");
 
     // Missing every field `sticker.typ` reads off `data` — fails at
     // `data.title` access during compilation.
@@ -514,11 +521,12 @@ async fn render_sticker_with_missing_field_returns_422() {
 async fn render_missing_required_field_is_rejected_by_schema_before_compile() {
     let app = common::spawn_app().await;
 
-    let template_key: String = sqlx::query_scalar("SELECT key FROM templates WHERE name = ?")
-        .bind("thermal-receipt")
-        .fetch_one(&app.db)
-        .await
-        .expect("thermal-receipt template should be synced from disk by spawn_app");
+    let template_key: String =
+        sqlx::query_scalar("SELECT key FROM templates WHERE description = ?")
+            .bind("Thermal Receipt")
+            .fetch_one(&app.db)
+            .await
+            .expect("thermal-receipt template should be synced from disk by spawn_app");
 
     let mut body = sample_receipt_data();
     body.as_object_mut().unwrap().remove("isCredit");
@@ -558,11 +566,12 @@ async fn render_missing_required_field_is_rejected_by_schema_before_compile() {
 async fn render_mistyped_field_is_rejected_by_schema() {
     let app = common::spawn_app().await;
 
-    let template_key: String = sqlx::query_scalar("SELECT key FROM templates WHERE name = ?")
-        .bind("thermal-receipt")
-        .fetch_one(&app.db)
-        .await
-        .expect("thermal-receipt template should be synced from disk by spawn_app");
+    let template_key: String =
+        sqlx::query_scalar("SELECT key FROM templates WHERE description = ?")
+            .bind("Thermal Receipt")
+            .fetch_one(&app.db)
+            .await
+            .expect("thermal-receipt template should be synced from disk by spawn_app");
 
     let mut body = sample_receipt_data();
     body["totalCents"] = json!("3997");
@@ -598,11 +607,12 @@ async fn render_mistyped_field_is_rejected_by_schema() {
 async fn render_with_unknown_extra_field_still_succeeds() {
     let app = common::spawn_app().await;
 
-    let template_key: String = sqlx::query_scalar("SELECT key FROM templates WHERE name = ?")
-        .bind("thermal-receipt")
-        .fetch_one(&app.db)
-        .await
-        .expect("thermal-receipt template should be synced from disk by spawn_app");
+    let template_key: String =
+        sqlx::query_scalar("SELECT key FROM templates WHERE description = ?")
+            .bind("Thermal Receipt")
+            .fetch_one(&app.db)
+            .await
+            .expect("thermal-receipt template should be synced from disk by spawn_app");
 
     let mut body = sample_receipt_data();
     body["futureField"] = json!({"anything": true});
@@ -622,4 +632,186 @@ async fn render_with_unknown_extra_field_still_succeeds() {
         .unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
+}
+
+// ============================================================================
+// Professional Modern Invoice + remote-image (`logoUrl`) rendering
+// ============================================================================
+
+fn modern_invoice_payload() -> serde_json::Value {
+    json!({
+        "businessName": "Northwind Studio",
+        "businessAddress": ["Office Address", "Main Street 06/B", "South Mountain, YK"],
+        "invoiceDate": "December 26, 2026",
+        "clientName": "Wagino Subianto",
+        "clientAddress": ["Main Street, Your Loc.", "Number 06/B"],
+        "currencySymbol": "$",
+        "items": [
+            {"name": "Brand identity workshop", "quantity": 1, "unitPriceCents": 2000},
+            {"name": "Landing page design", "quantity": 2, "unitPriceCents": 5000},
+        ],
+        "subtotalCents": 12000,
+        "discountRatePercent": 5,
+        "discountCents": 600,
+        "totalCents": 11400,
+    })
+}
+
+async fn modern_invoice_key(app: &common::TestApp) -> String {
+    sqlx::query_scalar("SELECT key FROM templates WHERE description = ?")
+        .bind("Professional Modern Invoice")
+        .fetch_one(&app.db)
+        .await
+        .expect("modern invoice template should be synced from disk by spawn_app")
+}
+
+async fn post_render(
+    app: &common::TestApp,
+    key: &str,
+    body: &serde_json::Value,
+) -> axum::response::Response {
+    app.router
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/render/{key}"))
+                .header("content-type", "application/json")
+                .header("X-Internal-Api-Key", &app.config.internal_api_key)
+                .body(Body::from(body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap()
+}
+
+/// No `.rimg_*` temp image should ever be left behind in the app's templates
+/// tree once a render (or reprint) has returned.
+fn assert_no_staged_images(app: &common::TestApp) {
+    let root = app
+        .templates_dir
+        .as_ref()
+        .expect("logoUrl tests use spawn_app_isolated_templates")
+        .path();
+    for sub in ["documents", "labels"] {
+        let leftovers: Vec<_> = std::fs::read_dir(root.join(sub))
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|e| e.file_name().to_string_lossy().starts_with(".rimg_"))
+            .collect();
+        assert!(
+            leftovers.is_empty(),
+            "staged images left in {sub}/: {leftovers:?}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn render_modern_invoice_from_sample_returns_pdf() {
+    let app = common::spawn_app().await;
+    let key = modern_invoice_key(&app).await;
+
+    let response = post_render(&app, &key, &modern_invoice_payload()).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    let pdf = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert!(pdf.starts_with(b"%PDF-"));
+}
+
+#[tokio::test]
+async fn render_modern_invoice_with_logo_url_downloads_and_cleans_up() {
+    let app = common::spawn_app_isolated_templates().await;
+    let images = common::spawn_image_server().await;
+    let key = modern_invoice_key(&app).await;
+
+    let mut body = modern_invoice_payload();
+    body["logoUrl"] = json!(format!("{}/logo.png", images.base_url));
+
+    // Two renders back to back — the second proves nothing about the first's
+    // image was retained (a stale cache would surface as a wrong/blank logo
+    // or unbounded growth, and a fixed temp filename would collide).
+    for _ in 0..2 {
+        let response = post_render(&app, &key, &body).await;
+        assert_eq!(
+            response.status(),
+            StatusCode::OK,
+            "logoUrl render should succeed"
+        );
+        let pdf = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert!(pdf.starts_with(b"%PDF-"));
+    }
+    assert_no_staged_images(&app);
+}
+
+#[tokio::test]
+async fn render_modern_invoice_with_bad_logo_url_returns_422() {
+    let app = common::spawn_app_isolated_templates().await;
+    let images = common::spawn_image_server().await;
+    let key = modern_invoice_key(&app).await;
+
+    for path in ["not-an-image", "huge", "missing"] {
+        let mut body = modern_invoice_payload();
+        body["logoUrl"] = json!(format!("{}/{}", images.base_url, path));
+        let response = post_render(&app, &key, &body).await;
+        assert_eq!(
+            response.status(),
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "logoUrl /{path} should be rejected"
+        );
+        let json: serde_json::Value = serde_json::from_slice(
+            &axum::body::to_bytes(response.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(json["code"], "REMOTE_IMAGE_FETCH_FAILED");
+    }
+
+    // A non-http scheme is rejected too.
+    let mut body = modern_invoice_payload();
+    body["logoUrl"] = json!("file:///etc/passwd");
+    let response = post_render(&app, &key, &body).await;
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+
+    assert_no_staged_images(&app);
+}
+
+#[tokio::test]
+async fn reprint_modern_invoice_with_logo_url_refetches() {
+    let app = common::spawn_app_isolated_templates().await;
+    let images = common::spawn_image_server().await;
+    let key = modern_invoice_key(&app).await;
+
+    let mut body = modern_invoice_payload();
+    body["logoUrl"] = json!(format!("{}/logo.png", images.base_url));
+    let response = post_render(&app, &key, &body).await;
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let document_key: String =
+        sqlx::query_scalar("SELECT key FROM documents ORDER BY created_at DESC LIMIT 1")
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
+
+    let response = app
+        .router
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri(format!("/api/documents/{document_key}/pdf"))
+                .header("X-Internal-Api-Key", &app.config.internal_api_key)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let pdf = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert!(pdf.starts_with(b"%PDF-"));
+    assert_no_staged_images(&app);
 }
