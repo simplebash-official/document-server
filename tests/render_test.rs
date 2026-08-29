@@ -1,8 +1,8 @@
 // Full-stack: real SQLite (a throwaway per-test file via
 // `common::spawn_app`), real render engine. Exercises the whole render
 // pipeline end to end against the seed templates (A4 Invoice, Thermal
-// Receipt, Credit Note, Product Sticker Label, Professional Modern Invoice),
-// resolved by their schema `title` since on-disk names are opaque ids now.
+// Receipt, Credit Note, Product Sticker Label), resolved by their schema
+// `title` since on-disk names are opaque ids now.
 
 mod common;
 
@@ -635,34 +635,44 @@ async fn render_with_unknown_extra_field_still_succeeds() {
 }
 
 // ============================================================================
-// Professional Modern Invoice + remote-image (`logoUrl`) rendering
+// A4 Invoice (the modern design) + remote/embedded-image (`logoUrl`) rendering
 // ============================================================================
 
-fn modern_invoice_payload() -> serde_json::Value {
+fn a4_invoice_payload() -> serde_json::Value {
     json!({
-        "businessName": "Northwind Studio",
-        "businessAddress": ["Office Address", "Main Street 06/B", "South Mountain, YK"],
-        "invoiceDate": "December 26, 2026",
-        "clientName": "Wagino Subianto",
-        "clientAddress": ["Main Street, Your Loc.", "Number 06/B"],
-        "currencySymbol": "$",
+        "invoiceNumber": "INV-0009",
+        "formattedDate": "28 Aug 2026",
+        "formattedTime": "10:15",
+        "cashierName": "Nimal Perera",
+        "status": "paid",
+        "isCredit": false,
+        "copyDesignation": "ORIGINAL — CUSTOMER COPY",
+        "isDuplicate": false,
+        "customerName": "Wagino Subianto",
+        "customerAddress": "Main Street, Colombo 06",
+        "paymentMethod": "cash",
+        "tenderedAmountCents": 15000,
         "items": [
-            {"name": "Brand identity workshop", "quantity": 1, "unitPriceCents": 2000},
-            {"name": "Landing page design", "quantity": 2, "unitPriceCents": 5000},
+            {"name": "Brand identity workshop", "quantity": 1, "unitPriceCents": 2000, "discountCents": 0, "totalCents": 2000},
+            {"name": "Landing page design", "quantity": 2, "unitPriceCents": 5000, "discountCents": 600, "totalCents": 9400},
         ],
         "subtotalCents": 12000,
-        "discountRatePercent": 5,
         "discountCents": 600,
         "totalCents": 11400,
+        "amountInWords": "Sri Lankan Rupees One Hundred Fourteen Only",
+        "showBankDetails": false,
+        "shopIsVatRegistered": false,
+        "shopAddressLines": ["123 Galle Road", "Colombo 04"],
+        "shopTradingName": "Northwind Studio",
     })
 }
 
-async fn modern_invoice_key(app: &common::TestApp) -> String {
+async fn a4_invoice_key(app: &common::TestApp) -> String {
     sqlx::query_scalar("SELECT key FROM templates WHERE description = ?")
-        .bind("Professional Modern Invoice")
+        .bind("A4 Invoice")
         .fetch_one(&app.db)
         .await
-        .expect("modern invoice template should be synced from disk by spawn_app")
+        .expect("A4 Invoice template should be synced from disk by spawn_app")
 }
 
 async fn post_render(
@@ -707,25 +717,75 @@ fn assert_no_staged_images(app: &common::TestApp) {
 }
 
 #[tokio::test]
-async fn render_modern_invoice_from_sample_returns_pdf() {
-    let app = common::spawn_app().await;
-    let key = modern_invoice_key(&app).await;
+async fn render_a4_invoice_with_data_uri_logo_returns_pdf() {
+    let app = common::spawn_app_isolated_templates().await;
+    let key = a4_invoice_key(&app).await;
 
-    let response = post_render(&app, &key, &modern_invoice_payload()).await;
-    assert_eq!(response.status(), StatusCode::OK);
+    let mut body = a4_invoice_payload();
+    body["logoUrl"] = json!(format!(
+        "data:image/png;base64,{}",
+        base64_of(common::TINY_PNG)
+    ));
+
+    let response = post_render(&app, &key, &body).await;
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "data: URI logo should render"
+    );
     let pdf = axum::body::to_bytes(response.into_body(), usize::MAX)
         .await
         .unwrap();
     assert!(pdf.starts_with(b"%PDF-"));
+    assert_no_staged_images(&app);
+
+    // The recorded row must NOT carry the base64 blob (it would bloat the table).
+    let stored: String =
+        sqlx::query_scalar("SELECT data FROM documents ORDER BY created_at DESC LIMIT 1")
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
+    let stored: serde_json::Value = serde_json::from_str(&stored).unwrap();
+    assert_eq!(
+        stored["logoUrl"], "",
+        "data: logoUrl should be blanked on record"
+    );
+}
+
+fn base64_of(bytes: &[u8]) -> String {
+    // Minimal standard-alphabet base64 — avoids adding a dep to the test crate.
+    const A: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::new();
+    for chunk in bytes.chunks(3) {
+        let b = [
+            chunk[0],
+            *chunk.get(1).unwrap_or(&0),
+            *chunk.get(2).unwrap_or(&0),
+        ];
+        let n = u32::from(b[0]) << 16 | u32::from(b[1]) << 8 | u32::from(b[2]);
+        out.push(A[(n >> 18 & 63) as usize] as char);
+        out.push(A[(n >> 12 & 63) as usize] as char);
+        out.push(if chunk.len() > 1 {
+            A[(n >> 6 & 63) as usize] as char
+        } else {
+            '='
+        });
+        out.push(if chunk.len() > 2 {
+            A[(n & 63) as usize] as char
+        } else {
+            '='
+        });
+    }
+    out
 }
 
 #[tokio::test]
-async fn render_modern_invoice_with_logo_url_downloads_and_cleans_up() {
+async fn render_a4_invoice_with_logo_url_downloads_and_cleans_up() {
     let app = common::spawn_app_isolated_templates().await;
     let images = common::spawn_image_server().await;
-    let key = modern_invoice_key(&app).await;
+    let key = a4_invoice_key(&app).await;
 
-    let mut body = modern_invoice_payload();
+    let mut body = a4_invoice_payload();
     body["logoUrl"] = json!(format!("{}/logo.png", images.base_url));
 
     // Two renders back to back — the second proves nothing about the first's
@@ -747,13 +807,13 @@ async fn render_modern_invoice_with_logo_url_downloads_and_cleans_up() {
 }
 
 #[tokio::test]
-async fn render_modern_invoice_with_bad_logo_url_returns_422() {
+async fn render_a4_invoice_with_bad_logo_url_returns_422() {
     let app = common::spawn_app_isolated_templates().await;
     let images = common::spawn_image_server().await;
-    let key = modern_invoice_key(&app).await;
+    let key = a4_invoice_key(&app).await;
 
     for path in ["not-an-image", "huge", "missing"] {
-        let mut body = modern_invoice_payload();
+        let mut body = a4_invoice_payload();
         body["logoUrl"] = json!(format!("{}/{}", images.base_url, path));
         let response = post_render(&app, &key, &body).await;
         assert_eq!(
@@ -771,7 +831,7 @@ async fn render_modern_invoice_with_bad_logo_url_returns_422() {
     }
 
     // A non-http scheme is rejected too.
-    let mut body = modern_invoice_payload();
+    let mut body = a4_invoice_payload();
     body["logoUrl"] = json!("file:///etc/passwd");
     let response = post_render(&app, &key, &body).await;
     assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
@@ -780,12 +840,12 @@ async fn render_modern_invoice_with_bad_logo_url_returns_422() {
 }
 
 #[tokio::test]
-async fn reprint_modern_invoice_with_logo_url_refetches() {
+async fn reprint_a4_invoice_with_logo_url_refetches() {
     let app = common::spawn_app_isolated_templates().await;
     let images = common::spawn_image_server().await;
-    let key = modern_invoice_key(&app).await;
+    let key = a4_invoice_key(&app).await;
 
-    let mut body = modern_invoice_payload();
+    let mut body = a4_invoice_payload();
     body["logoUrl"] = json!(format!("{}/logo.png", images.base_url));
     let response = post_render(&app, &key, &body).await;
     assert_eq!(response.status(), StatusCode::OK);

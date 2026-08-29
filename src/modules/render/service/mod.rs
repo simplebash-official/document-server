@@ -111,15 +111,16 @@ pub(crate) async fn render_template(
     Ok((pdf_bytes, template.key))
 }
 
-/// Validates `data`, resolves any remote `logoUrl` in it, compiles
+/// Validates `data`, resolves any `logoUrl` in it to image bytes, compiles
 /// `template_name` against the result, and translates any Typst failure into
 /// the right `AppError` — shared by `render_template` above and
 /// `documents::service::reprint_document` (`GET /api/documents/{key}/pdf`),
 /// so both go through the exact same contract enforcement and
 /// compile-error -> HTTP-status mapping instead of duplicating it.
 ///
-/// `async` because a `logoUrl` payload triggers an outbound image download
-/// (see `clients::http`); the compile itself is still synchronous CPU work.
+/// `async` because an http(s) `logoUrl` triggers an outbound download (see
+/// `clients::http`); a `data:` URI is decoded inline. The compile itself is
+/// still synchronous CPU work.
 ///
 /// Takes the template's `data_schema` alongside its name because validation
 /// lives with compilation (`render_template` and the reprint path each
@@ -142,25 +143,35 @@ pub(crate) async fn compile_pdf(
         .filter(|url| !url.is_empty())
         .map(str::to_owned);
 
-    if cfg.remote_image_fetch_enabled
-        && let Some(url) = logo_url
-    {
+    // A `data:` URI is local bytes (no network) so it's always honoured; an
+    // http(s) URL is a real fetch, gated by the kill switch.
+    let logo_image = match logo_url.as_deref() {
+        Some(url) if url.starts_with("data:") => Some(
+            http::decode_data_uri(url, cfg.remote_image_max_bytes).map_err(|err| {
+                AppError::unprocessable_entity(codes::REMOTE_IMAGE_FETCH_FAILED, err.to_string())
+            })?,
+        ),
+        Some(url) if cfg.remote_image_fetch_enabled => Some(
+            http::fetch_image(
+                url,
+                cfg.remote_image_max_bytes,
+                Duration::from_secs(cfg.remote_image_timeout_secs),
+            )
+            .await
+            .map_err(|err| {
+                AppError::unprocessable_entity(codes::REMOTE_IMAGE_FETCH_FAILED, err.to_string())
+            })?,
+        ),
+        _ => None,
+    };
+
+    if let Some(image) = logo_image {
         // Compile through a one-shot engine so the staged image never enters
         // the shared engine's unbounded file cache.
         let rel_path = render.template_rel_path(template_name).ok_or_else(|| {
             AppError::internal(format!("no file path known for template '{template_name}'"))
         })?;
         let rel_path = rel_path.to_owned();
-
-        let image = http::fetch_image(
-            &url,
-            cfg.remote_image_max_bytes,
-            Duration::from_secs(cfg.remote_image_timeout_secs),
-        )
-        .await
-        .map_err(|err| {
-            AppError::unprocessable_entity(codes::REMOTE_IMAGE_FETCH_FAILED, err.to_string())
-        })?;
 
         let staged =
             StagedImage::write(std::path::Path::new(&cfg.templates_dir), &rel_path, &image)

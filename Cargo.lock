@@ -774,6 +774,7 @@ dependencies = [
  "arc-swap",
  "axum",
  "barcoders",
+ "base64",
  "chrono",
  "dotenvy",
  "jsonschema",

@@ -16,10 +16,16 @@ template by hand means following the same convention (then `POST /api/templates/
 The **human name** of a template lives in its `<name>.schema.json` `title` field. The
 sync pass copies that `title` into the `templates.description` column, which is what
 `GET /api/templates` and integration clients read to tell templates apart. Seed
-templates today: `doc_temp_vEf0Y7jQHQj2rIuO` = "A4 Invoice",
-`doc_temp_4pz79z5iba7TcEIp` = "Thermal Receipt", `doc_temp_5DHl8hUQTX3oLBSR` =
-"Credit Note", `doc_temp_6aCI1iKvb14RbEAb` = "Professional Modern Invoice",
-`lbl_temp_qklcWIolwoFFN3xk` = "Product Sticker Label".
+templates today: `doc_temp_vEf0Y7jQHQj2rIuO` = "A4 Invoice" (a branded/modern layout
+with an optional `logoUrl` — see below), `doc_temp_4pz79z5iba7TcEIp` = "Thermal
+Receipt", `doc_temp_5DHl8hUQTX3oLBSR` = "Credit Note", `lbl_temp_qklcWIolwoFFN3xk` =
+"Product Sticker Label".
+
+The A4 Invoice's `logoUrl` field accepts an **http(s) URL** (downloaded at render
+time) **or** a `data:image/…;base64,…` URI (decoded inline, no network) — jana2u-pos
+sends its shop logo the second way. The server turns either into a local file for
+that one compile and discards it; a `data:` `logoUrl` is also blanked from the
+recorded `documents` row so the table doesn't carry the blob.
 
 ## Sidecar conventions (per template)
 

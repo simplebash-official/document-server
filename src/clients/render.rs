@@ -457,39 +457,6 @@ mod tests {
     }
 
     #[test]
-    fn warm_up_and_compile_modern_invoice_produces_a_pdf() {
-        let engine = RenderEngine::warm_up("templates", "fonts").expect("warm_up should succeed");
-        let template = discovered(&engine, "Professional Modern Invoice");
-        assert_eq!(template.template_type, TemplateType::Document);
-        let template_name = template.name.clone();
-
-        let mut item = Dict::new();
-        item.insert(Str::from("name"), "Design work".into_value());
-        item.insert(Str::from("quantity"), Value::Int(2));
-        item.insert(Str::from("unitPriceCents"), Value::Int(1500));
-
-        let mut input = Dict::new();
-        input.insert(Str::from("businessName"), "Acme Co".into_value());
-        input.insert(Str::from("invoiceDate"), "Dec 26, 2026".into_value());
-        input.insert(Str::from("clientName"), "Jane Doe".into_value());
-        input.insert(
-            Str::from("items"),
-            Value::Array(std::iter::once(Value::Dict(item)).collect()),
-        );
-        input.insert(Str::from("subtotalCents"), Value::Int(3000));
-        input.insert(Str::from("totalCents"), Value::Int(3000));
-
-        let warned = engine.compile(&template_name, input);
-        let doc = warned
-            .output
-            .expect("modern invoice template should compile");
-
-        let pdf_bytes =
-            typst_pdf::pdf(&doc, &Default::default()).expect("pdf export should succeed");
-        assert!(pdf_bytes.starts_with(b"%PDF-"));
-    }
-
-    #[test]
     fn compile_once_matches_the_shared_engine_for_the_same_input() {
         let engine = RenderEngine::warm_up("templates", "fonts").expect("warm_up should succeed");
         let name = discovered(&engine, "Product Sticker Label").name.clone();

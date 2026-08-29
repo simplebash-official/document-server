@@ -15,7 +15,7 @@ pub fn generate_id(prefix: &str) -> String {
 
 /// Generates a template's stable on-disk identity (its `.typ` stem and
 /// `templates.name`): `<prefix>_temp_<nanoid16>`, e.g.
-/// `doc_temp_6aCI1iKvb14RbEAb`. `prefix` is `doc` for documents / `lbl` for
+/// `doc_temp_Xk3nR8Qp2vT9wLm0`. `prefix` is `doc` for documents / `lbl` for
 /// labels — see `core::constants::prefixes::TEMPLATE_NAME_*`. Distinct from
 /// `generate_id`'s `<prefix>_<nanoid>` keys: the `_temp_` infix keeps a
 /// template *name* from being mistaken for a `doc_...` document *key*.

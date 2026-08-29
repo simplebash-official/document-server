@@ -46,6 +46,9 @@ barcoders = { version = "2.0", default-features = false, features = ["svg", "std
 # `clients::http` + `modules::render::service`). `rustls-tls` keeps the
 # build free of a system OpenSSL dependency (matches the SQLite choice).
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "http2"] }
+# Decodes a `data:image/...;base64,...` logo URI (see `clients::http`) — a
+# shop that stores its logo inline rather than at an http(s) URL.
+base64 = "0.22"
 
 [dev-dependencies]
 # Gives every `tests::common::spawn_app()` call its own throwaway SQLite
