@@ -7,6 +7,11 @@
 // contract below and POSTs it to `/api/render/{templateKey}`.
 //
 // Data contract (see this file's sibling .json for a worked example):
+//   logoUrl         string (optional) — an http(s) URL or a data:image/… URI.
+//                   The server downloads/decodes it and sets `logo` to a local
+//                   filename before compiling; leave `logo` unset in the payload.
+//   logo            string (optional, server-injected) — local image filename.
+//   logoWidth       number (optional) — logo width in pt (default 46).
 //   invoiceNumber, formattedDate, formattedTime   string
 //   dueDate         string (optional, credit sales only)
 //   cashierName     string
@@ -40,12 +45,14 @@
 
 #set document(title: "Invoice " + data.at("invoiceNumber", default: ""))
 
-#let primary = rgb("#3D4EAC")
-#let ink = rgb("#0F1115")
+// Steel-blue accent (the "modern invoice" identity), semantic status colours
+// left as they were.
+#let primary = rgb("#2c5f8a")
+#let ink = rgb("#1f2024")
 #let muted = rgb("#5B6270")
 #let muted-2 = rgb("#6C737F")
 #let faint = rgb("#9AA1AC")
-#let border = rgb("#E4E6EB")
+#let border = rgb("#E2E3E8")
 #let panel-bg = rgb("#FAFAFB")
 #let panel-bg-2 = rgb("#F4F5F7")
 #let ok-color = rgb("#0E9F6E")
@@ -61,6 +68,25 @@
 #set par(leading: 0.55em, justify: false)
 
 // ---------------------------------------------------------------------------
+// Logo — the payload image (server-injected from `logoUrl`), or the built-in
+// swirl monogram when the shop has none.
+// ---------------------------------------------------------------------------
+#let logo = data.at("logo", default: none)
+#let logo-width = data.at("logoWidth", default: 46) * 1pt
+#let default-logo = image(
+  bytes(
+    "<svg viewBox=\"0 0 100 100\" width=\"48\" height=\"48\" xmlns=\"http://www.w3.org/2000/svg\">"
+      + "<path d=\"M 50,16 C 28,16 16,34 16,54 C 16,74 30,84 50,84 C 68,84 82,72 82,52 "
+      + "C 82,34 68,28 56,28 C 42,28 34,38 34,49 C 34,60 42,66 50,66 C 58,66 64,59 64,51\" "
+      + "fill=\"none\" stroke=\"#2c5f8a\" stroke-width=\"8.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>"
+      + "</svg>",
+  ),
+  format: "svg",
+  width: 46pt,
+)
+#let active-logo = if logo != none { image(logo, width: logo-width) } else { default-logo }
+
+// ---------------------------------------------------------------------------
 // Header band: shop branding (left) vs INVOICE meta + status stamp (right)
 // ---------------------------------------------------------------------------
 #let status = data.at("status", default: "pending")
@@ -74,6 +100,8 @@
   column-gutter: 20pt,
   align: (left, right),
   [
+    #active-logo
+    #v(6pt)
     #let trading-name = data.at("shopTradingName", default: data.at("shopLegalName", default: ""))
     #text(size: 15pt, weight: "bold", fill: primary)[#trading-name]
     #v(2pt)
@@ -154,34 +182,42 @@
   #body
 ]
 
-#grid(
-  columns: (1fr, 1fr),
-  column-gutter: 12pt,
-  info-panel("Bill To")[
-    #text(size: 10.5pt, weight: "bold")[#data.at("customerName", default: "Walk-in Customer")]
-    #let phone = data.at("customerPhone", default: "")
-    #if phone != "" [
-      \ #text(size: 8.5pt, fill: primary, weight: "bold")[Phone: #phone]
-    ]
-    #let addr = data.at("customerAddress", default: "")
-    #if addr != "" [
-      \ #text(size: 8pt, fill: muted)[Address: #addr]
-    ]
-  ],
-  info-panel("Payment Summary")[
-    #let method = data.at("paymentMethod", default: "cash")
-    #let last4 = data.at("cardLast4", default: data.at("cardRef", default: ""))
-    #grid(
-      columns: (1fr, auto), align: (left, right), row-gutter: 2pt,
-      text(size: 8.5pt, fill: muted)[Payment Method:],
-      text(size: 8.5pt, weight: "bold")[#upper(method) #if method == "card" and last4 != "" [(•••• #last4)]],
-      text(size: 8.5pt, fill: muted)[Amount Tendered:],
-      text(size: 8.5pt, weight: 600)[#format-money(data.at("tenderedAmountCents", default: data.at("totalCents", default: 0)))],
-      text(size: 8.5pt, fill: muted)[Balance Due:],
-      text(size: 8.5pt, weight: "bold", fill: if is-credit { credit-color } else { ok-color })[#if is-credit { format-money(data.at("totalCents", default: 0)) } else { format-money(0) }],
-    )
-  ],
-)
+#let customer-name = data.at("customerName", default: "")
+#let customer-phone = data.at("customerPhone", default: "")
+#let customer-address = data.at("customerAddress", default: "")
+#let has-bill-to = customer-name != "" or customer-phone != "" or customer-address != ""
+
+#let bill-to-panel = info-panel("Bill To")[
+  #text(size: 10.5pt, weight: "bold")[#customer-name]
+  #if customer-phone != "" [
+    \ #text(size: 8.5pt, fill: primary, weight: "bold")[Phone: #customer-phone]
+  ]
+  #if customer-address != "" [
+    \ #text(size: 8pt, fill: muted)[Address: #customer-address]
+  ]
+]
+
+#let payment-summary-panel = info-panel("Payment Summary")[
+  #let method = data.at("paymentMethod", default: "cash")
+  #let last4 = data.at("cardLast4", default: data.at("cardRef", default: ""))
+  #grid(
+    columns: (1fr, auto), align: (left, right), row-gutter: 2pt,
+    text(size: 8.5pt, fill: muted)[Payment Method:],
+    text(size: 8.5pt, weight: "bold")[#upper(method) #if method == "card" and last4 != "" [(•••• #last4)]],
+    text(size: 8.5pt, fill: muted)[Amount Tendered:],
+    text(size: 8.5pt, weight: 600)[#format-money(data.at("tenderedAmountCents", default: data.at("totalCents", default: 0)))],
+    text(size: 8.5pt, fill: muted)[Balance Due:],
+    text(size: 8.5pt, weight: "bold", fill: if is-credit { credit-color } else { ok-color })[#if is-credit { format-money(data.at("totalCents", default: 0)) } else { format-money(0) }],
+  )
+]
+
+// A walk-in with no customer details gets no empty "Bill To" box — the
+// payment summary takes the right half on its own instead.
+#if has-bill-to {
+  grid(columns: (1fr, 1fr), column-gutter: 12pt, bill-to-panel, payment-summary-panel)
+} else {
+  grid(columns: (1fr, 1fr), column-gutter: 12pt, [], payment-summary-panel)
+}
 
 #v(14pt)
 
@@ -193,16 +229,16 @@
 #table(
   columns: (18pt, 1fr, 34pt, 62pt, 52pt, 68pt),
   align: (center, left, center, right, right, right),
-  stroke: (x, y) => if y == 0 { (top: 0.6pt + border, bottom: 0.6pt + border) } else { (bottom: 0.6pt + border) },
+  stroke: (x, y) => if y == 0 { none } else { (bottom: 0.5pt + border) },
   inset: (x: 5pt, y: 6pt),
-  fill: (x, y) => if y == 0 { panel-bg-2 } else { white },
+  fill: (x, y) => if y == 0 { primary } else { white },
   table.header(
-    text(size: 7.5pt, weight: "bold", fill: muted)[#sym.numero],
-    text(size: 7.5pt, weight: "bold", fill: muted)[Description],
-    text(size: 7.5pt, weight: "bold", fill: muted)[Qty],
-    text(size: 7.5pt, weight: "bold", fill: muted)[Unit Price],
-    text(size: 7.5pt, weight: "bold", fill: muted)[Discount],
-    text(size: 7.5pt, weight: "bold", fill: muted)[Amount],
+    text(size: 7.5pt, weight: "bold", fill: white)[#sym.numero],
+    text(size: 7.5pt, weight: "bold", fill: white)[Description],
+    text(size: 7.5pt, weight: "bold", fill: white)[Qty],
+    text(size: 7.5pt, weight: "bold", fill: white)[Unit Price],
+    text(size: 7.5pt, weight: "bold", fill: white)[Discount],
+    text(size: 7.5pt, weight: "bold", fill: white)[Amount],
   ),
   ..items.enumerate().map(((idx, item)) => (
     text(size: 8.5pt, fill: faint)[#(idx + 1)],
@@ -260,7 +296,7 @@
     #box(width: 100%, fill: primary, radius: 3pt, inset: (x: 10pt, y: 6pt))[
       #grid(
         columns: (1fr, auto), align: (left + horizon, right + horizon),
-        text(size: 8pt, weight: "bold", fill: white, tracking: 0.04em)[GRAND TOTAL],
+        text(size: 8pt, weight: "bold", fill: white, tracking: 0.04em)[TOTAL DUE],
         text(size: 13pt, weight: 800, fill: white)[#format-money(data.at("totalCents", default: 0))],
       )
     ]
@@ -332,9 +368,11 @@
 #v(14pt)
 
 // --- Footer ---
-#line(length: 100%, stroke: 0.6pt + border)
-#v(4pt)
+#line(length: 100%, stroke: 0.8pt + primary)
+#v(5pt)
 #align(center)[
+  #text(size: 9pt, weight: "bold", fill: primary)[Thank you for your business]
+  #v(2pt)
   #text(size: 7.5pt, fill: muted-2)[
     #data.at("shopTradingName", default: "") · Tel: #data.at("shopPrimaryPhone", default: "") · Email: #data.at("shopEmail", default: "")
   ]

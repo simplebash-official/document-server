@@ -46,7 +46,6 @@ async fn list_templates_returns_every_seeded_template_with_type_and_expected_dat
             "A4 Invoice",
             "Credit Note",
             "Product Sticker Label",
-            "Professional Modern Invoice",
             "Thermal Receipt",
         ]
     );
@@ -88,12 +87,6 @@ async fn list_templates_returns_every_seeded_template_with_type_and_expected_dat
     assert_eq!(receipt_tpl["data"]["totalCents"], 1100000);
     assert_eq!(receipt_tpl["data"]["paperWidthMm"], 80);
 
-    let modern_tpl = by_desc("Professional Modern Invoice");
-    assert_eq!(modern_tpl["type"], "document");
-    assert!(modern_tpl["data"]["items"].is_array());
-    let required = modern_tpl["dataSchema"]["required"].as_array().unwrap();
-    assert!(required.iter().any(|r| r == "businessName"));
-
     let sticker_tpl = by_desc("Product Sticker Label");
     assert_eq!(sticker_tpl["type"], "label");
     assert_eq!(sticker_tpl["data"]["title"], "USB-C Cable");
@@ -129,7 +122,7 @@ async fn list_templates_filters_by_type() {
     .unwrap();
 
     let templates = json["data"]["templates"].as_array().unwrap();
-    assert_eq!(templates.len(), 4);
+    assert_eq!(templates.len(), 3);
     assert!(templates.iter().all(|t| t["type"] == "document"));
     let mut descriptions: Vec<&str> = templates
         .iter()
@@ -138,12 +131,7 @@ async fn list_templates_filters_by_type() {
     descriptions.sort_unstable();
     assert_eq!(
         descriptions,
-        vec![
-            "A4 Invoice",
-            "Credit Note",
-            "Professional Modern Invoice",
-            "Thermal Receipt",
-        ]
+        vec!["A4 Invoice", "Credit Note", "Thermal Receipt"]
     );
 
     // Filter by type=label
@@ -305,7 +293,7 @@ async fn sync_deactivates_templates_removed_from_disk() {
             .unwrap(),
     )
     .unwrap();
-    assert_eq!(json["data"]["syncedCount"], 5);
+    assert_eq!(json["data"]["syncedCount"], 4);
     assert_eq!(json["data"]["deactivatedCount"], 1);
     let names: Vec<&str> = json["data"]["templates"]
         .as_array()
@@ -313,7 +301,7 @@ async fn sync_deactivates_templates_removed_from_disk() {
         .iter()
         .map(|v| v.as_str().unwrap())
         .collect();
-    assert_eq!(names.len(), 5);
+    assert_eq!(names.len(), 4);
     assert!(
         names
             .iter()
@@ -332,7 +320,7 @@ async fn sync_deactivates_templates_removed_from_disk() {
             .fetch_one(&app.db)
             .await
             .unwrap();
-    assert_eq!(active_count, 5);
+    assert_eq!(active_count, 4);
 }
 
 // The point of the sync endpoint: a `.typ` dropped into the templates dir
@@ -376,7 +364,7 @@ async fn sync_picks_up_new_template_and_renders_it_without_restart() {
             .unwrap(),
     )
     .unwrap();
-    assert_eq!(json["data"]["syncedCount"], 6);
+    assert_eq!(json["data"]["syncedCount"], 5);
 
     let hot_key: String = sqlx::query_scalar("SELECT key FROM templates WHERE name = 'hot-add'")
         .fetch_one(&app.db)

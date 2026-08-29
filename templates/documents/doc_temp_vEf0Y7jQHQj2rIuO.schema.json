@@ -25,6 +25,8 @@
     "shopAddressLines"
   ],
   "properties": {
+    "logoUrl": { "type": "string" },
+    "logoWidth": { "type": "number" },
     "invoiceNumber": { "type": "string" },
     "formattedDate": { "type": "string" },
     "formattedTime": { "type": "string" },

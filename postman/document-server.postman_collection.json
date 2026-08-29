@@ -121,7 +121,7 @@
           "response": []
         },
         {
-          "name": "Render Modern Invoice (logoUrl)",
+          "name": "Render A4 Invoice (with logo)",
           "request": {
             "method": "POST",
             "header": [
@@ -148,14 +148,14 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"businessName\": \"Northwind Studio\",\n  \"businessAddress\": [\n    \"Office Address\",\n    \"Main Street 06/B\",\n    \"South Mountain, YK\"\n  ],\n  \"logoUrl\": \"https://example.com/logo.png\",\n  \"invoiceDate\": \"December 26, 2026\",\n  \"clientName\": \"Wagino Subianto\",\n  \"clientAddress\": [\n    \"Main Street, Your Loc.\",\n    \"Number 06/B\"\n  ],\n  \"currencySymbol\": \"$\",\n  \"items\": [\n    {\n      \"name\": \"Brand identity workshop\",\n      \"quantity\": 1,\n      \"unitPriceCents\": 2000\n    },\n    {\n      \"name\": \"Landing page design\",\n      \"quantity\": 2,\n      \"unitPriceCents\": 5000\n    }\n  ],\n  \"subtotalCents\": 12000,\n  \"discountRatePercent\": 5,\n  \"discountCents\": 600,\n  \"totalCents\": 11400\n}",
+              "raw": "{\n  \"invoiceNumber\": \"INV-000123\",\n  \"formattedDate\": \"28 Aug 2026\",\n  \"formattedTime\": \"10:15\",\n  \"cashierName\": \"Nimal Perera\",\n  \"status\": \"paid\",\n  \"isCredit\": false,\n  \"copyDesignation\": \"ORIGINAL \\u2014 CUSTOMER COPY\",\n  \"isDuplicate\": false,\n  \"customerName\": \"Kasun Silva\",\n  \"customerAddress\": \"45 Lake Road, Colombo 06\",\n  \"paymentMethod\": \"cash\",\n  \"tenderedAmountCents\": 1200000,\n  \"logoUrl\": \"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==\",\n  \"items\": [\n    {\n      \"name\": \"Screen Protector\",\n      \"sku\": \"ACC-SP-014\",\n      \"quantity\": 2,\n      \"unitPriceCents\": 150000,\n      \"discountCents\": 0,\n      \"totalCents\": 300000\n    },\n    {\n      \"name\": \"Screen Replacement\",\n      \"quantity\": 1,\n      \"unitPriceCents\": 850000,\n      \"discountCents\": 50000,\n      \"totalCents\": 800000\n    }\n  ],\n  \"subtotalCents\": 1100000,\n  \"discountCents\": 0,\n  \"totalCents\": 1100000,\n  \"amountInWords\": \"Sri Lankan Rupees Eleven Thousand Only\",\n  \"showBankDetails\": false,\n  \"shopIsVatRegistered\": false,\n  \"shopTradingName\": \"TechFix Repairs\",\n  \"shopAddressLines\": [\n    \"123 Galle Road\",\n    \"Colombo 04\"\n  ],\n  \"shopPrimaryPhone\": \"011 234 5678\",\n  \"shopEmail\": \"info@techfixrepairs.lk\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
                 }
               }
             },
-            "description": "Renders the Professional Modern Invoice. `logoUrl` is a remote image URL \u2014 the server downloads it (http(s), <= REMOTE_IMAGE_MAX_BYTES, image/* only), uses it for this one compile, and deletes it; nothing about the image is stored. Omit `logoUrl` to use the template's built-in vector mark. A bad URL \u2192 422 `REMOTE_IMAGE_FETCH_FAILED`. All amounts are integer cents. Resolve `{{templateKey}}` from `GET /api/templates` (description \"Professional Modern Invoice\")."
+            "description": "Renders the A4 Invoice (the branded/modern layout). `logoUrl` is optional and accepts an http(s) image URL or a `data:image/...;base64,...` URI (jana2u-pos's shop logo is sent this way). The server turns either into a local file for this one compile and discards it; a `data:` logoUrl is also blanked from the recorded documents row. Omit `logoUrl` to use the built-in vector mark. A bad/oversized/non-image URL -> 422 `REMOTE_IMAGE_FETCH_FAILED`. All amounts are integer cents. Resolve `{{templateKey}}` from `GET /api/templates` (description \"A4 Invoice\")."
           },
           "response": []
         }

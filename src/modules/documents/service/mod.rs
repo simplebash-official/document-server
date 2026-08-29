@@ -22,12 +22,25 @@ use crate::{
 /// blob storage for a first version. Called by
 /// `modules::render::service::render_template` after a render succeeds; see
 /// spec §6.2.
+///
+/// One field is *not* stored verbatim: a `logoUrl` that is a `data:` URI
+/// (an inline base64 image — jana2u-pos sends its shop logo this way) is
+/// blanked before persisting. Such a blob is tens–hundreds of KB and would
+/// land on every recorded row; the caller is the source of truth for the
+/// logo and simply re-sends it on the next render. An http(s) `logoUrl` is
+/// kept as-is — it's cheap and a reprint needs it.
 pub(crate) async fn record_document(
     db: &SqlitePool,
     template_key: &str,
-    data: serde_json::Value,
+    mut data: serde_json::Value,
     file_size_bytes: i64,
 ) -> AppResult<Document> {
+    if let Some(logo_url) = data.get("logoUrl").and_then(|v| v.as_str())
+        && logo_url.starts_with("data:")
+    {
+        data["logoUrl"] = serde_json::Value::String(String::new());
+    }
+
     let key = generate_id(prefixes::DOCUMENT);
     let row = repository::insert_document(db, &key, template_key, data, file_size_bytes).await?;
     Ok(row.into_document())
