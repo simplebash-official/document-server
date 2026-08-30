@@ -1,0 +1,65 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Analytics Report",
+  "description": "Input contract for the Analytics & Reports PDF. Every series and table arrives pre-aggregated from the jana2u-pos backend's reports::service::report_payload builder — see the .typ header comment for the field-by-field description and the sibling .json for a worked example. Shop letterhead (shopName / shopAddressLines / logoUrl) is supplied via stored template-data and merged in at render time.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["generatedAt", "periodLabel", "granularityLabel", "kpis", "timeseries"],
+  "properties": {
+    "logoUrl": { "type": "string" },
+    "shopName": { "type": "string" },
+    "shopAddressLines": { "type": "array", "items": { "type": "string" } },
+    "generatedAt": { "type": "string" },
+    "periodLabel": { "type": "string" },
+    "granularityLabel": { "type": "string" },
+    "comparisonLabel": { "type": "string" },
+    "currency": { "type": "string" },
+    "kpis": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["label", "value"],
+        "properties": {
+          "label": { "type": "string" },
+          "value": { "type": "string" },
+          "deltaLabel": { "type": "string" },
+          "deltaDirection": { "type": "string", "enum": ["up", "down", "flat"] }
+        }
+      }
+    },
+    "timeseries": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["labels", "revenueCents", "grossProfitCents"],
+      "properties": {
+        "labels": { "type": "array", "items": { "type": "string" } },
+        "revenueCents": { "type": "array", "items": { "type": "number" } },
+        "retailRevenueCents": { "type": "array", "items": { "type": "number" } },
+        "repairRevenueCents": { "type": "array", "items": { "type": "number" } },
+        "printRevenueCents": { "type": "array", "items": { "type": "number" } },
+        "cogsCents": { "type": "array", "items": { "type": "number" } },
+        "grossProfitCents": { "type": "array", "items": { "type": "number" } },
+        "grossMarginBps": { "type": "array", "items": { "type": "number" } }
+      }
+    },
+    "paymentMethods": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "label": { "type": "string" },
+          "amountCents": { "type": "number" }
+        }
+      }
+    },
+    "salesByCategory": { "type": "array", "items": { "type": "object" } },
+    "topProducts": { "type": "array", "items": { "type": "object" } },
+    "topCustomers": { "type": "array", "items": { "type": "object" } },
+    "cashierPerformance": { "type": "array", "items": { "type": "object" } },
+    "receivablesAging": { "type": "array", "items": { "type": "object" } },
+    "weekdayPattern": { "type": "array", "items": { "type": "number" } },
+    "refunds": { "type": "object" },
+    "inventoryValuation": { "type": "object" }
+  }
+}

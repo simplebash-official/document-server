@@ -44,6 +44,7 @@ async fn list_templates_returns_every_seeded_template_with_type_and_expected_dat
         descriptions,
         vec![
             "A4 Invoice",
+            "Analytics Report",
             "Credit Note",
             "Product Sticker Label",
             "Thermal Receipt",
@@ -122,7 +123,7 @@ async fn list_templates_filters_by_type() {
     .unwrap();
 
     let templates = json["data"]["templates"].as_array().unwrap();
-    assert_eq!(templates.len(), 3);
+    assert_eq!(templates.len(), 4);
     assert!(templates.iter().all(|t| t["type"] == "document"));
     let mut descriptions: Vec<&str> = templates
         .iter()
@@ -131,7 +132,12 @@ async fn list_templates_filters_by_type() {
     descriptions.sort_unstable();
     assert_eq!(
         descriptions,
-        vec!["A4 Invoice", "Credit Note", "Thermal Receipt"]
+        vec![
+            "A4 Invoice",
+            "Analytics Report",
+            "Credit Note",
+            "Thermal Receipt"
+        ]
     );
 
     // Filter by type=label
@@ -293,7 +299,7 @@ async fn sync_deactivates_templates_removed_from_disk() {
             .unwrap(),
     )
     .unwrap();
-    assert_eq!(json["data"]["syncedCount"], 4);
+    assert_eq!(json["data"]["syncedCount"], 5);
     assert_eq!(json["data"]["deactivatedCount"], 1);
     let names: Vec<&str> = json["data"]["templates"]
         .as_array()
@@ -301,7 +307,7 @@ async fn sync_deactivates_templates_removed_from_disk() {
         .iter()
         .map(|v| v.as_str().unwrap())
         .collect();
-    assert_eq!(names.len(), 4);
+    assert_eq!(names.len(), 5);
     assert!(
         names
             .iter()
@@ -320,7 +326,7 @@ async fn sync_deactivates_templates_removed_from_disk() {
             .fetch_one(&app.db)
             .await
             .unwrap();
-    assert_eq!(active_count, 4);
+    assert_eq!(active_count, 5);
 }
 
 // The point of the sync endpoint: a `.typ` dropped into the templates dir
@@ -364,7 +370,7 @@ async fn sync_picks_up_new_template_and_renders_it_without_restart() {
             .unwrap(),
     )
     .unwrap();
-    assert_eq!(json["data"]["syncedCount"], 5);
+    assert_eq!(json["data"]["syncedCount"], 6);
 
     let hot_key: String = sqlx::query_scalar("SELECT key FROM templates WHERE name = 'hot-add'")
         .fetch_one(&app.db)

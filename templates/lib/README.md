@@ -1,4 +1,12 @@
-# Vendored Typst packages
+# Shared template libraries
+
+## First-party
+
+- **`money.typ`** — `format-money(cents)` → `"Rs. 1,234.50"`, mirrors the frontend's `formatMoney()`.
+- **`codes.typ`** / **`barcode.typ`** / **`qrcode.typ`** — barcode/QR helpers for the sticker label.
+- **`charts.typ`** — tiny hand-rolled chart primitives (`column-chart`, `stacked-column-chart`, `hbar-chart`, `line-chart`, `share-bar`) used by the Analytics Report template. Built only from `rect`/`line`/`place`/`grid`/`layout` — deliberately **not** a vendored `cetz`/`cetz-plot` (those are LGPL-3.0 and slow to compile, and a business report only needs bars + a line). Add chart types here as report templates need them.
+
+## Vendored packages
 
 `tiaoma/` and `zebra/` are vendored copies of two MIT-licensed Typst Universe packages (`@preview/tiaoma:0.3.0` and `@preview/zebra:0.1.0`), used by the Product Sticker Label template (`../labels/lbl_temp_qklcWIolwoFFN3xk.typ`) for barcode/QR generation:
 

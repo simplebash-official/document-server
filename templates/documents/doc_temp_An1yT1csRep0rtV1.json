@@ -1,0 +1,85 @@
+{
+  "shopName": "Jana2u Repair & Print",
+  "shopAddressLines": ["128 Galle Road", "Colombo 04", "Sri Lanka"],
+  "generatedAt": "30 Aug 2026, 14:05",
+  "periodLabel": "1 Aug 2026 – 30 Aug 2026",
+  "granularityLabel": "Weekly",
+  "comparisonLabel": "vs previous 30 days",
+  "currency": "LKR",
+  "kpis": [
+    { "label": "Total revenue", "value": "Rs. 1,842,500.00", "deltaLabel": "+12.4% vs previous", "deltaDirection": "up" },
+    { "label": "Gross profit", "value": "Rs. 731,200.00", "deltaLabel": "+8.1% vs previous", "deltaDirection": "up" },
+    { "label": "Net profit", "value": "Rs. 512,900.00", "deltaLabel": "-3.2% vs previous", "deltaDirection": "down" },
+    { "label": "Invoices", "value": "486", "deltaLabel": "+5.0% vs previous", "deltaDirection": "up" },
+    { "label": "Average basket", "value": "Rs. 3,791.00", "deltaLabel": "+7.0% vs previous", "deltaDirection": "up" },
+    { "label": "Gross margin", "value": "39.7%" },
+    { "label": "Discounts given", "value": "Rs. 96,400.00" },
+    { "label": "Refunds", "value": "Rs. 41,250.00" }
+  ],
+  "timeseries": {
+    "labels": ["W31", "W32", "W33", "W34", "W35"],
+    "revenueCents": [38200000, 41500000, 39900000, 44100000, 20550000],
+    "retailRevenueCents": [21000000, 23800000, 22100000, 25400000, 11900000],
+    "repairRevenueCents": [11200000, 11700000, 11800000, 12600000, 5900000],
+    "printRevenueCents": [6000000, 6000000, 6000000, 6100000, 2750000],
+    "cogsCents": [23600000, 25300000, 24100000, 26800000, 12600000],
+    "grossProfitCents": [14600000, 16200000, 15800000, 17300000, 7950000],
+    "grossMarginBps": [3822, 3903, 3959, 3923, 3869]
+  },
+  "paymentMethods": [
+    { "label": "Cash", "amountCents": 92000000 },
+    { "label": "Card", "amountCents": 61500000 },
+    { "label": "Online", "amountCents": 18750000 },
+    { "label": "Credit", "amountCents": 12000000 }
+  ],
+  "salesByCategory": [
+    { "name": "Phone Accessories", "unitsSold": 412, "revenueCents": 61800000, "grossProfitCents": 27200000 },
+    { "name": "Screen Parts", "unitsSold": 88, "revenueCents": 44000000, "grossProfitCents": 15400000 },
+    { "name": "Chargers & Cables", "unitsSold": 260, "revenueCents": 20800000, "grossProfitCents": 9880000 },
+    { "name": "Stationery", "unitsSold": 540, "revenueCents": 13500000, "grossProfitCents": 6210000 }
+  ],
+  "topProducts": [
+    { "name": "Tempered Glass 6.1\"", "unitsSold": 190, "revenueCents": 19000000 },
+    { "name": "USB-C Cable 1m", "unitsSold": 150, "revenueCents": 9000000 },
+    { "name": "Silicone Case (Clear)", "unitsSold": 132, "revenueCents": 7920000 }
+  ],
+  "topCustomers": [
+    { "name": "Perera Communications", "invoiceCount": 22, "revenueCents": 41200000, "grossProfitCents": 12600000, "outstandingCents": 3800000 },
+    { "name": "Silva Stores", "invoiceCount": 15, "revenueCents": 28800000, "grossProfitCents": 9100000, "outstandingCents": 0 },
+    { "name": "Walk-in", "invoiceCount": 380, "revenueCents": 96500000, "grossProfitCents": 38700000, "outstandingCents": 0 }
+  ],
+  "cashierPerformance": [
+    { "name": "Nimal", "invoiceCount": 260, "revenueCents": 98800000, "discountGivenCents": 52000000, "grossProfitCents": 39200000 },
+    { "name": "Kamala", "invoiceCount": 226, "revenueCents": 85450000, "discountGivenCents": 44400000, "grossProfitCents": 33900000 }
+  ],
+  "receivablesAging": [
+    { "label": "Current", "amountCents": 4200000, "invoiceCount": 6 },
+    { "label": "1–30 days", "amountCents": 3100000, "invoiceCount": 4 },
+    { "label": "31–60 days", "amountCents": 1800000, "invoiceCount": 3 },
+    { "label": "61–90 days", "amountCents": 900000, "invoiceCount": 1 },
+    { "label": "90+ days", "amountCents": 2000000, "invoiceCount": 2 }
+  ],
+  "weekdayPattern": [22800000, 24100000, 23500000, 26900000, 34200000, 38700000, 13600000],
+  "refunds": {
+    "creditNoteCount": 18,
+    "netRefundCents": 4125000,
+    "refundCashCents": 3200000,
+    "byReason": [
+      { "reason": "defective", "amountCents": 2100000, "count": 9 },
+      { "reason": "wrong_item", "amountCents": 900000, "count": 4 },
+      { "reason": "customer_changed_mind", "amountCents": 1125000, "count": 5 }
+    ]
+  },
+  "inventoryValuation": {
+    "totalCostValuationCents": 184500000,
+    "totalRetailValuationCents": 312000000,
+    "potentialGrossProfitCents": 127500000,
+    "lowStockProductsCount": 14,
+    "outOfStockProductsCount": 3,
+    "categories": [
+      { "name": "Phone Accessories", "costValuationCents": 62000000, "retailValuationCents": 108000000 },
+      { "name": "Screen Parts", "costValuationCents": 71000000, "retailValuationCents": 119000000 },
+      { "name": "Chargers & Cables", "costValuationCents": 28500000, "retailValuationCents": 49000000 }
+    ]
+  }
+}
