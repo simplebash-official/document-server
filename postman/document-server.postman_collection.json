@@ -158,6 +158,44 @@
             "description": "Renders the A4 Invoice (the branded/modern layout). `logoUrl` is optional and accepts an http(s) image URL or a `data:image/...;base64,...` URI (jana2u-pos's shop logo is sent this way). The server turns either into a local file for this one compile and discards it; a `data:` logoUrl is also blanked from the recorded documents row. Omit `logoUrl` to use the built-in vector mark. A bad/oversized/non-image URL -> 422 `REMOTE_IMAGE_FETCH_FAILED`. All amounts are integer cents. Resolve `{{templateKey}}` from `GET /api/templates` (description \"A4 Invoice\")."
           },
           "response": []
+        },
+        {
+          "name": "Render Analytics Report",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Internal-Api-Key",
+                "value": "{{internalApiKey}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"shopName\": \"Jana2u Repair & Print\",\n  \"shopAddressLines\": [\n    \"128 Galle Road\",\n    \"Colombo 04\",\n    \"Sri Lanka\"\n  ],\n  \"generatedAt\": \"30 Aug 2026, 14:05\",\n  \"periodLabel\": \"1 Aug 2026 \\u2013 30 Aug 2026\",\n  \"granularityLabel\": \"Weekly\",\n  \"comparisonLabel\": \"vs previous 30 days\",\n  \"currency\": \"LKR\",\n  \"kpis\": [\n    {\n      \"label\": \"Total revenue\",\n      \"value\": \"Rs. 1,842,500.00\",\n      \"deltaLabel\": \"+12.4% vs previous\",\n      \"deltaDirection\": \"up\"\n    },\n    {\n      \"label\": \"Gross profit\",\n      \"value\": \"Rs. 731,200.00\",\n      \"deltaLabel\": \"+8.1% vs previous\",\n      \"deltaDirection\": \"up\"\n    },\n    {\n      \"label\": \"Net profit\",\n      \"value\": \"Rs. 512,900.00\",\n      \"deltaLabel\": \"-3.2% vs previous\",\n      \"deltaDirection\": \"down\"\n    },\n    {\n      \"label\": \"Invoices\",\n      \"value\": \"486\",\n      \"deltaLabel\": \"+5.0% vs previous\",\n      \"deltaDirection\": \"up\"\n    },\n    {\n      \"label\": \"Average basket\",\n      \"value\": \"Rs. 3,791.00\",\n      \"deltaLabel\": \"+7.0% vs previous\",\n      \"deltaDirection\": \"up\"\n    },\n    {\n      \"label\": \"Gross margin\",\n      \"value\": \"39.7%\"\n    },\n    {\n      \"label\": \"Discounts given\",\n      \"value\": \"Rs. 96,400.00\"\n    },\n    {\n      \"label\": \"Refunds\",\n      \"value\": \"Rs. 41,250.00\"\n    }\n  ],\n  \"timeseries\": {\n    \"labels\": [\n      \"W31\",\n      \"W32\",\n      \"W33\",\n      \"W34\",\n      \"W35\"\n    ],\n    \"revenueCents\": [\n      38200000,\n      41500000,\n      39900000,\n      44100000,\n      20550000\n    ],\n    \"retailRevenueCents\": [\n      21000000,\n      23800000,\n      22100000,\n      25400000,\n      11900000\n    ],\n    \"repairRevenueCents\": [\n      11200000,\n      11700000,\n      11800000,\n      12600000,\n      5900000\n    ],\n    \"printRevenueCents\": [\n      6000000,\n      6000000,\n      6000000,\n      6100000,\n      2750000\n    ],\n    \"cogsCents\": [\n      23600000,\n      25300000,\n      24100000,\n      26800000,\n      12600000\n    ],\n    \"grossProfitCents\": [\n      14600000,\n      16200000,\n      15800000,\n      17300000,\n      7950000\n    ],\n    \"grossMarginBps\": [\n      3822,\n      3903,\n      3959,\n      3923,\n      3869\n    ]\n  },\n  \"paymentMethods\": [\n    {\n      \"label\": \"Cash\",\n      \"amountCents\": 92000000\n    },\n    {\n      \"label\": \"Card\",\n      \"amountCents\": 61500000\n    },\n    {\n      \"label\": \"Online\",\n      \"amountCents\": 18750000\n    },\n    {\n      \"label\": \"Credit\",\n      \"amountCents\": 12000000\n    }\n  ],\n  \"salesByCategory\": [\n    {\n      \"name\": \"Phone Accessories\",\n      \"unitsSold\": 412,\n      \"revenueCents\": 61800000,\n      \"grossProfitCents\": 27200000\n    },\n    {\n      \"name\": \"Screen Parts\",\n      \"unitsSold\": 88,\n      \"revenueCents\": 44000000,\n      \"grossProfitCents\": 15400000\n    },\n    {\n      \"name\": \"Chargers & Cables\",\n      \"unitsSold\": 260,\n      \"revenueCents\": 20800000,\n      \"grossProfitCents\": 9880000\n    },\n    {\n      \"name\": \"Stationery\",\n      \"unitsSold\": 540,\n      \"revenueCents\": 13500000,\n      \"grossProfitCents\": 6210000\n    }\n  ],\n  \"topProducts\": [\n    {\n      \"name\": \"Tempered Glass 6.1\\\"\",\n      \"unitsSold\": 190,\n      \"revenueCents\": 19000000\n    },\n    {\n      \"name\": \"USB-C Cable 1m\",\n      \"unitsSold\": 150,\n      \"revenueCents\": 9000000\n    },\n    {\n      \"name\": \"Silicone Case (Clear)\",\n      \"unitsSold\": 132,\n      \"revenueCents\": 7920000\n    }\n  ],\n  \"topCustomers\": [\n    {\n      \"name\": \"Perera Communications\",\n      \"invoiceCount\": 22,\n      \"revenueCents\": 41200000,\n      \"grossProfitCents\": 12600000,\n      \"outstandingCents\": 3800000\n    },\n    {\n      \"name\": \"Silva Stores\",\n      \"invoiceCount\": 15,\n      \"revenueCents\": 28800000,\n      \"grossProfitCents\": 9100000,\n      \"outstandingCents\": 0\n    },\n    {\n      \"name\": \"Walk-in\",\n      \"invoiceCount\": 380,\n      \"revenueCents\": 96500000,\n      \"grossProfitCents\": 38700000,\n      \"outstandingCents\": 0\n    }\n  ],\n  \"cashierPerformance\": [\n    {\n      \"name\": \"Nimal\",\n      \"invoiceCount\": 260,\n      \"revenueCents\": 98800000,\n      \"discountGivenCents\": 52000000,\n      \"grossProfitCents\": 39200000\n    },\n    {\n      \"name\": \"Kamala\",\n      \"invoiceCount\": 226,\n      \"revenueCents\": 85450000,\n      \"discountGivenCents\": 44400000,\n      \"grossProfitCents\": 33900000\n    }\n  ],\n  \"receivablesAging\": [\n    {\n      \"label\": \"Current\",\n      \"amountCents\": 4200000,\n      \"invoiceCount\": 6\n    },\n    {\n      \"label\": \"1\\u201330 days\",\n      \"amountCents\": 3100000,\n      \"invoiceCount\": 4\n    },\n    {\n      \"label\": \"31\\u201360 days\",\n      \"amountCents\": 1800000,\n      \"invoiceCount\": 3\n    },\n    {\n      \"label\": \"61\\u201390 days\",\n      \"amountCents\": 900000,\n      \"invoiceCount\": 1\n    },\n    {\n      \"label\": \"90+ days\",\n      \"amountCents\": 2000000,\n      \"invoiceCount\": 2\n    }\n  ],\n  \"weekdayPattern\": [\n    22800000,\n    24100000,\n    23500000,\n    26900000,\n    34200000,\n    38700000,\n    13600000\n  ],\n  \"refunds\": {\n    \"creditNoteCount\": 18,\n    \"netRefundCents\": 4125000,\n    \"refundCashCents\": 3200000,\n    \"byReason\": [\n      {\n        \"reason\": \"defective\",\n        \"amountCents\": 2100000,\n        \"count\": 9\n      },\n      {\n        \"reason\": \"wrong_item\",\n        \"amountCents\": 900000,\n        \"count\": 4\n      },\n      {\n        \"reason\": \"customer_changed_mind\",\n        \"amountCents\": 1125000,\n        \"count\": 5\n      }\n    ]\n  },\n  \"inventoryValuation\": {\n    \"totalCostValuationCents\": 184500000,\n    \"totalRetailValuationCents\": 312000000,\n    \"potentialGrossProfitCents\": 127500000,\n    \"lowStockProductsCount\": 14,\n    \"outOfStockProductsCount\": 3,\n    \"categories\": [\n      {\n        \"name\": \"Phone Accessories\",\n        \"costValuationCents\": 62000000,\n        \"retailValuationCents\": 108000000\n      },\n      {\n        \"name\": \"Screen Parts\",\n        \"costValuationCents\": 71000000,\n        \"retailValuationCents\": 119000000\n      },\n      {\n        \"name\": \"Chargers & Cables\",\n        \"costValuationCents\": 28500000,\n        \"retailValuationCents\": 49000000\n      }\n    ]\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/render/{{analyticsReportKey}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "render",
+                "{{analyticsReportKey}}"
+              ]
+            },
+            "description": "Renders the multi-section Analytics & Reports PDF. `{{analyticsReportKey}}` is the `templates.key` for the template whose description is \"Analytics Report\" (GET /api/templates). Payload is built by the jana2u-pos backend's reports::service::report_payload; the worked example here matches the committed sample .json."
+          },
+          "response": []
         }
       ]
     },

@@ -875,3 +875,142 @@ async fn reprint_a4_invoice_with_logo_url_refetches() {
     assert!(pdf.starts_with(b"%PDF-"));
     assert_no_staged_images(&app);
 }
+
+/// The worked example payload committed alongside the Analytics Report
+/// template — kept in step with `analytics-report.schema.json` and the
+/// backend's `reports::service::report_payload` builder.
+fn sample_analytics_report_data() -> serde_json::Value {
+    serde_json::from_str(include_str!(
+        "../templates/documents/doc_temp_An1yT1csRep0rtV1.json"
+    ))
+    .expect("analytics report sample .json should be valid")
+}
+
+#[tokio::test]
+async fn render_analytics_report_returns_multipage_pdf() {
+    let app = common::spawn_app().await;
+
+    let template_key: String =
+        sqlx::query_scalar("SELECT key FROM templates WHERE description = ?")
+            .bind("Analytics Report")
+            .fetch_one(&app.db)
+            .await
+            .expect("analytics-report template should be synced from disk by spawn_app");
+
+    let body = sample_analytics_report_data();
+    let response = app
+        .router
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/render/{template_key}"))
+                .header("content-type", "application/json")
+                .header("X-Internal-Api-Key", &app.config.internal_api_key)
+                .body(Body::from(body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response
+            .headers()
+            .get("content-type")
+            .and_then(|v| v.to_str().ok()),
+        Some("application/pdf")
+    );
+    let pdf = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert!(pdf.starts_with(b"%PDF-"));
+    // A real multi-section report is comfortably over 20 KB.
+    assert!(
+        pdf.len() > 20_000,
+        "report PDF unexpectedly small: {} bytes",
+        pdf.len()
+    );
+}
+
+#[tokio::test]
+async fn render_analytics_report_with_empty_period_still_renders() {
+    let app = common::spawn_app().await;
+
+    let template_key: String =
+        sqlx::query_scalar("SELECT key FROM templates WHERE description = ?")
+            .bind("Analytics Report")
+            .fetch_one(&app.db)
+            .await
+            .expect("analytics-report template should be synced from disk by spawn_app");
+
+    // Only the required fields, all series/tables empty — a quiet period.
+    let body = json!({
+        "generatedAt": "30 Aug 2026, 09:00",
+        "periodLabel": "1 Aug 2026 – 1 Aug 2026",
+        "granularityLabel": "Daily",
+        "kpis": [
+            { "label": "Total revenue", "value": "Rs. 0.00" },
+        ],
+        "timeseries": { "labels": [], "revenueCents": [], "grossProfitCents": [] },
+    });
+
+    let response = app
+        .router
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/render/{template_key}"))
+                .header("content-type", "application/json")
+                .header("X-Internal-Api-Key", &app.config.internal_api_key)
+                .body(Body::from(body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let pdf = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert!(pdf.starts_with(b"%PDF-"));
+}
+
+#[tokio::test]
+async fn render_analytics_report_missing_kpis_is_rejected_by_schema() {
+    let app = common::spawn_app().await;
+
+    let template_key: String =
+        sqlx::query_scalar("SELECT key FROM templates WHERE description = ?")
+            .bind("Analytics Report")
+            .fetch_one(&app.db)
+            .await
+            .expect("analytics-report template should be synced from disk by spawn_app");
+
+    let mut body = sample_analytics_report_data();
+    body.as_object_mut().unwrap().remove("kpis");
+
+    let response = app
+        .router
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/render/{template_key}"))
+                .header("content-type", "application/json")
+                .header("X-Internal-Api-Key", &app.config.internal_api_key)
+                .body(Body::from(body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    let json: serde_json::Value = serde_json::from_slice(
+        &axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(json["code"], "RENDER_VALIDATION_FAILED");
+    assert!(json["message"].as_str().unwrap().contains("kpis"));
+}
