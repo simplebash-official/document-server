@@ -15,7 +15,7 @@
 //   invoiceNumber, formattedDate, formattedTime   string
 //   dueDate         string (optional, credit sales only)
 //   cashierName     string
-//   status          "paid" | "pending" | "cancelled"
+//   status          "paid" | "pending" | "partially_paid" | "voided" | "closed"
 //   isCredit        bool
 //   copyDesignation string, e.g. "ORIGINAL — CUSTOMER COPY"
 //   isDuplicate     bool
@@ -23,6 +23,11 @@
 //   paymentMethod   "cash" | "card" | "online" | "split" | "credit"
 //   cardLast4, cardRef   string (optional)
 //   tenderedAmountCents   integer
+//   amountPaidCents  integer (optional) — total collected so far. On a
+//                    partial-credit invoice this is the deposit + any
+//                    installments; derived from balanceDueCents if absent.
+//   balanceDueCents  integer (optional) — amount still owed; drives the
+//                    "PART-PAID" stamp and the BALANCE DUE box.
 //   items           array of { name, sku?, sourceTicketNumber?,
 //                     assignedEmployeeName?, quantity, unitPriceCents,
 //                     discountCents, totalCents }
@@ -90,9 +95,22 @@
 // Header band: shop branding (left) vs INVOICE meta + status stamp (right)
 // ---------------------------------------------------------------------------
 #let status = data.at("status", default: "pending")
-#let is-credit = data.at("isCredit", default: false) or status == "pending"
+#let is-partial = status == "partially_paid"
+#let is-credit = data.at("isCredit", default: false) or status == "pending" or is-partial
 #let is-paid = status == "paid" and not is-credit
-#let status-label = if is-paid { "PAID" } else if is-credit { "CREDIT" } else { "PENDING" }
+// "Amount paid so far" and "balance still due" — sent by the backend for a
+// partial-credit invoice; fall back to deriving one from the other so older
+// payloads (before these fields existed) still render sensibly.
+#let total-cents = data.at("totalCents", default: 0)
+#let amount-paid-cents = data.at(
+  "amountPaidCents",
+  default: if is-credit { total-cents - data.at("balanceDueCents", default: total-cents) } else { total-cents },
+)
+#let balance-due-cents = data.at(
+  "balanceDueCents",
+  default: if is-credit { total-cents - amount-paid-cents } else { 0 },
+)
+#let status-label = if is-paid { "PAID" } else if is-partial { "PART-PAID" } else if is-credit { "CREDIT" } else { "PENDING" }
 #let status-color = if is-paid { ok-color } else if is-credit { credit-color } else { muted-2 }
 
 #grid(
@@ -204,10 +222,10 @@
     columns: (1fr, auto), align: (left, right), row-gutter: 2pt,
     text(size: 8.5pt, fill: muted)[Payment Method:],
     text(size: 8.5pt, weight: "bold")[#upper(method) #if method == "card" and last4 != "" [(•••• #last4)]],
-    text(size: 8.5pt, fill: muted)[Amount Tendered:],
-    text(size: 8.5pt, weight: 600)[#format-money(data.at("tenderedAmountCents", default: data.at("totalCents", default: 0)))],
+    text(size: 8.5pt, fill: muted)[Amount Paid:],
+    text(size: 8.5pt, weight: 600)[#format-money(amount-paid-cents)],
     text(size: 8.5pt, fill: muted)[Balance Due:],
-    text(size: 8.5pt, weight: "bold", fill: if is-credit { credit-color } else { ok-color })[#if is-credit { format-money(data.at("totalCents", default: 0)) } else { format-money(0) }],
+    text(size: 8.5pt, weight: "bold", fill: if balance-due-cents > 0 { credit-color } else { ok-color })[#format-money(balance-due-cents)],
   )
 ]
 
@@ -297,8 +315,23 @@
       #grid(
         columns: (1fr, auto), align: (left + horizon, right + horizon),
         text(size: 8pt, weight: "bold", fill: white, tracking: 0.04em)[TOTAL DUE],
-        text(size: 13pt, weight: 800, fill: white)[#format-money(data.at("totalCents", default: 0))],
+        text(size: 13pt, weight: 800, fill: white)[#format-money(total-cents)],
       )
+    ]
+    #if balance-due-cents > 0 [
+      #v(5pt)
+      #box(width: 100%, stroke: 1pt + credit-color, radius: 3pt, inset: (x: 10pt, y: 6pt))[
+        #grid(
+          columns: (1fr, auto), align: (left + horizon, right + horizon),
+          text(size: 8pt, weight: "bold", fill: credit-color, tracking: 0.04em)[BALANCE DUE],
+          text(size: 13pt, weight: 800, fill: credit-color)[#format-money(balance-due-cents)],
+        )
+        #let due = data.at("dueDate", default: "")
+        #if due != "" [
+          #v(2pt)
+          #text(size: 7.5pt, fill: muted-2)[Please pay the outstanding balance by #due.]
+        ]
+      ]
     ]
   ]
 ]

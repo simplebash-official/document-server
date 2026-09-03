@@ -25,6 +25,11 @@
 //   cardLast4       string (card only)
 //   splitPayments   array of { method, amountCents, cardLast4? } (split only)
 //   isCredit        bool
+//   dueDate         string (optional) — YYYY-MM-DD, credit sales only.
+//   amountPaidCents integer (optional) — collected so far (deposit +
+//                   installments) on a partial-credit sale.
+//   balanceDueCents integer (optional) — amount still owed; shows the
+//                   Paid / BALANCE DUE / Pay By lines.
 //   warrantyText    string (optional)
 //   footerText      string (optional) — thank-you line
 //   shopTradingName, shopLegalName   string
@@ -182,8 +187,23 @@
   ]
 ]
 
-#if data.at("isCredit", default: false) [
-  #kv-row("STATUS:", "UNPAID CREDIT", bold-value: true)
+#let total-cents = data.at("totalCents", default: 0)
+#let balance-due-cents = data.at(
+  "balanceDueCents",
+  default: if data.at("isCredit", default: false) {
+    total-cents - data.at("amountPaidCents", default: 0)
+  } else { 0 },
+)
+#if data.at("isCredit", default: false) or balance-due-cents > 0 [
+  #let paid = data.at("amountPaidCents", default: total-cents - balance-due-cents)
+  #if paid > 0 [
+    #kv-row("Paid:", format-money(paid), bold-value: true)
+  ]
+  #kv-row("BALANCE DUE:", format-money(balance-due-cents), bold-value: true)
+  #let due = data.at("dueDate", default: "")
+  #if due != "" [
+    #kv-row("Pay By:", due)
+  ]
 ]
 
 #divider(dashed: true)

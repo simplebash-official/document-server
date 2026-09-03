@@ -87,6 +87,40 @@
           "response": []
         },
         {
+          "name": "Render Receipt (partial credit)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/render/{{templateKey}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "render",
+                "{{templateKey}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceNumber\": \"INV-0001\",\n  \"customerName\": \"Jane Doe\",\n  \"items\": [\n    {\n      \"description\": \"Widget\",\n      \"quantity\": 2,\n      \"unitPrice\": 9.99\n    },\n    {\n      \"description\": \"Gadget\",\n      \"quantity\": 1,\n      \"unitPrice\": 19.99\n    }\n  ],\n  \"total\": 39.97,\n  \"footerCode\": {\n    \"type\": \"qr\",\n    \"value\": \"https://jana2u.com/pay/inv_0001\",\n    \"size\": \"18mm\"\n  },\n  \"isCredit\": true,\n  \"paymentMethod\": \"credit\",\n  \"dueDate\": \"2026-12-31\",\n  \"amountPaidCents\": 40000,\n  \"balanceDueCents\": 74000\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Compiles the `receipt` document template against this request body and returns the rendered PDF as raw bytes (`Content-Type: application/pdf`). Supports dynamic barcode or QR code injection via `footerCode` placeholder slot.\n\nErrors return standard `{success, message, code, statusCode}` JSON: 404 `TEMPLATE_NOT_FOUND`, 422 `RENDER_VALIDATION_FAILED`, 500 `PDF_EXPORT_FAILED`."
+          },
+          "response": []
+        },
+        {
           "name": "Render Sticker",
           "request": {
             "method": "POST",
@@ -149,6 +183,45 @@
             "body": {
               "mode": "raw",
               "raw": "{\n  \"invoiceNumber\": \"INV-000123\",\n  \"formattedDate\": \"28 Aug 2026\",\n  \"formattedTime\": \"10:15\",\n  \"cashierName\": \"Nimal Perera\",\n  \"status\": \"paid\",\n  \"isCredit\": false,\n  \"copyDesignation\": \"ORIGINAL \\u2014 CUSTOMER COPY\",\n  \"isDuplicate\": false,\n  \"customerName\": \"Kasun Silva\",\n  \"customerAddress\": \"45 Lake Road, Colombo 06\",\n  \"paymentMethod\": \"cash\",\n  \"tenderedAmountCents\": 1200000,\n  \"logoUrl\": \"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==\",\n  \"items\": [\n    {\n      \"name\": \"Screen Protector\",\n      \"sku\": \"ACC-SP-014\",\n      \"quantity\": 2,\n      \"unitPriceCents\": 150000,\n      \"discountCents\": 0,\n      \"totalCents\": 300000\n    },\n    {\n      \"name\": \"Screen Replacement\",\n      \"quantity\": 1,\n      \"unitPriceCents\": 850000,\n      \"discountCents\": 50000,\n      \"totalCents\": 800000\n    }\n  ],\n  \"subtotalCents\": 1100000,\n  \"discountCents\": 0,\n  \"totalCents\": 1100000,\n  \"amountInWords\": \"Sri Lankan Rupees Eleven Thousand Only\",\n  \"showBankDetails\": false,\n  \"shopIsVatRegistered\": false,\n  \"shopTradingName\": \"TechFix Repairs\",\n  \"shopAddressLines\": [\n    \"123 Galle Road\",\n    \"Colombo 04\"\n  ],\n  \"shopPrimaryPhone\": \"011 234 5678\",\n  \"shopEmail\": \"info@techfixrepairs.lk\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Renders the A4 Invoice (the branded/modern layout). `logoUrl` is optional and accepts an http(s) image URL or a `data:image/...;base64,...` URI (jana2u-pos's shop logo is sent this way). The server turns either into a local file for this one compile and discards it; a `data:` logoUrl is also blanked from the recorded documents row. Omit `logoUrl` to use the built-in vector mark. A bad/oversized/non-image URL -> 422 `REMOTE_IMAGE_FETCH_FAILED`. All amounts are integer cents. Resolve `{{templateKey}}` from `GET /api/templates` (description \"A4 Invoice\")."
+          },
+          "response": []
+        },
+        {
+          "name": "Render A4 Invoice (partial credit)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Internal-Api-Key",
+                "value": "{{internalApiKey}}",
+                "description": "Required \u2014 internal callers only."
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/render/{{templateKey}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "render",
+                "{{templateKey}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invoiceNumber\": \"INV-000123\",\n  \"formattedDate\": \"28 Aug 2026\",\n  \"formattedTime\": \"10:15\",\n  \"cashierName\": \"Nimal Perera\",\n  \"status\": \"partially_paid\",\n  \"isCredit\": true,\n  \"copyDesignation\": \"ORIGINAL \\u2014 CUSTOMER COPY\",\n  \"isDuplicate\": false,\n  \"customerName\": \"Kasun Silva\",\n  \"customerAddress\": \"45 Lake Road, Colombo 06\",\n  \"paymentMethod\": \"credit\",\n  \"tenderedAmountCents\": 1200000,\n  \"items\": [\n    {\n      \"name\": \"Screen Protector\",\n      \"sku\": \"ACC-SP-014\",\n      \"quantity\": 2,\n      \"unitPriceCents\": 150000,\n      \"discountCents\": 0,\n      \"totalCents\": 300000\n    },\n    {\n      \"name\": \"Screen Replacement\",\n      \"quantity\": 1,\n      \"unitPriceCents\": 850000,\n      \"discountCents\": 50000,\n      \"totalCents\": 800000\n    }\n  ],\n  \"subtotalCents\": 1100000,\n  \"discountCents\": 0,\n  \"totalCents\": 1100000,\n  \"amountInWords\": \"Sri Lankan Rupees Eleven Thousand Only\",\n  \"showBankDetails\": false,\n  \"shopIsVatRegistered\": false,\n  \"shopTradingName\": \"TechFix Repairs\",\n  \"shopAddressLines\": [\n    \"123 Galle Road\",\n    \"Colombo 04\"\n  ],\n  \"shopPrimaryPhone\": \"011 234 5678\",\n  \"shopEmail\": \"info@techfixrepairs.lk\",\n  \"dueDate\": \"2026-12-31\",\n  \"amountPaidCents\": 40000,\n  \"balanceDueCents\": 74000\n}",
               "options": {
                 "raw": {
                   "language": "json"

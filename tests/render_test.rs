@@ -752,6 +752,68 @@ async fn render_a4_invoice_with_data_uri_logo_returns_pdf() {
     );
 }
 
+#[tokio::test]
+async fn render_a4_invoice_partially_paid_shows_paid_and_balance_due() {
+    let app = common::spawn_app().await;
+    let key = a4_invoice_key(&app).await;
+
+    let mut body = a4_invoice_payload();
+    body["status"] = json!("partially_paid");
+    body["isCredit"] = json!(true);
+    body["paymentMethod"] = json!("credit");
+    body["dueDate"] = json!("2026-12-31");
+    body["amountPaidCents"] = json!(4000);
+    body["balanceDueCents"] = json!(7400);
+
+    let response = post_render(&app, &key, &body).await;
+    assert_eq!(response.status(), StatusCode::OK, "Body: {body}");
+    let pdf = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert!(pdf.starts_with(b"%PDF-"));
+}
+
+#[tokio::test]
+async fn render_thermal_receipt_partial_credit_shows_balance_and_due_date() {
+    let app = common::spawn_app().await;
+    let template_key: String =
+        sqlx::query_scalar("SELECT key FROM templates WHERE description = ?")
+            .bind("Thermal Receipt")
+            .fetch_one(&app.db)
+            .await
+            .expect("thermal-receipt template should be synced from disk by spawn_app");
+
+    let mut body = sample_receipt_data();
+    body["paymentMethod"] = json!("credit");
+    body["isCredit"] = json!(true);
+    body["tenderedAmountCents"] = json!(2000);
+    body["changeDueCents"] = json!(0);
+    body["dueDate"] = json!("2026-12-31");
+    body["amountPaidCents"] = json!(2000);
+    body["balanceDueCents"] = json!(1997);
+
+    let response = app
+        .router
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/render/{template_key}"))
+                .header("content-type", "application/json")
+                .header("X-Internal-Api-Key", &app.config.internal_api_key)
+                .body(Body::from(body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK, "Body: {body}");
+    let pdf = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert!(pdf.starts_with(b"%PDF-"));
+}
+
 fn base64_of(bytes: &[u8]) -> String {
     // Minimal standard-alphabet base64 — avoids adding a dep to the test crate.
     const A: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";

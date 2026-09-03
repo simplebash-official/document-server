@@ -49,6 +49,8 @@
     "cardLast4": { "type": "string" },
     "cardRef": { "type": "string" },
     "tenderedAmountCents": { "type": "integer" },
+    "amountPaidCents": { "type": "integer" },
+    "balanceDueCents": { "type": "integer" },
     "items": {
       "type": "array",
       "items": {
