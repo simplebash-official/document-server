@@ -8,7 +8,7 @@ A standalone Rust/Axum service that renders PDFs from Typst templates (embedded 
 
 **Access model — one shared secret, not "no auth"**: every route meant only for backend callers (`render`, `documents`, `POST /api/templates` + `templates/sync`, all of `template-data`) takes the `InternalCaller` extractor (`core/middleware/auth.rs`) and requires `X-Internal-Api-Key: $INTERNAL_API_KEY`. `INTERNAL_API_KEY` has deliberately no default — an unset secret fails startup rather than booting wide open. Genuinely public reads: `GET /api/health`, Swagger, `GET /api/templates`(list + single). There are no users/roles/tokens; a richer auth model would be a deliberate new addition.
 
-**Env vars** (all default except `INTERNAL_API_KEY`): see `.env.example`. Beyond the core set, `REMOTE_IMAGE_FETCH_ENABLED` / `REMOTE_IMAGE_MAX_BYTES` / `REMOTE_IMAGE_TIMEOUT_SECS` bound the render-time `logoUrl` download (see the `render` module below).
+**Env vars** (all default except `INTERNAL_API_KEY`): see `.env.example`. `BIND_ADDR` (default `0.0.0.0`) restricts the listener to loopback (`127.0.0.1`) for the Tauri desktop bundle. Beyond the core set, `REMOTE_IMAGE_FETCH_ENABLED` / `REMOTE_IMAGE_MAX_BYTES` / `REMOTE_IMAGE_TIMEOUT_SECS` bound the render-time `logoUrl` download (see the `render` module below).
 
 ## Commands
 

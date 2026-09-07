@@ -34,6 +34,7 @@ async fn main() {
         std::process::exit(1);
     });
     let port = config.port;
+    let bind_addr = config.bind_addr.clone();
 
     tracing::info!(database_url = %config.database_url, "Opening SQLite database...");
     let db = clients::sqlite::connect(&config.database_url)
@@ -78,12 +79,13 @@ async fn main() {
     };
     let router = app::build_router(state);
 
-    // Bound to 0.0.0.0 (not localhost) so the container/host can route
-    // external traffic to it.
-    let listener = tokio::net::TcpListener::bind(("0.0.0.0", port))
+    // Defaults to 0.0.0.0 so a container/host can route external traffic in;
+    // `BIND_ADDR=127.0.0.1` restricts it to loopback (used by the Tauri
+    // desktop bundle, where only the local backend calls this service).
+    let listener = tokio::net::TcpListener::bind((bind_addr.as_str(), port))
         .await
         .unwrap_or_else(|err| {
-            tracing::error!(%err, "failed to bind listener");
+            tracing::error!(%err, %bind_addr, "failed to bind listener");
             std::process::exit(1);
         });
 

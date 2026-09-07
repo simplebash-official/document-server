@@ -11,6 +11,10 @@ pub struct Config {
     /// if it doesn't exist — see `clients::sqlite::connect`.
     pub database_url: String,
     pub port: u16,
+    /// Address the HTTP listener binds to. Defaults to `0.0.0.0` (all
+    /// interfaces) for container deployments; the Tauri desktop bundle sets
+    /// `127.0.0.1` to keep this service on loopback only.
+    pub bind_addr: String,
     pub templates_dir: String,
     pub fonts_dir: String,
     pub max_render_body_bytes: usize,
@@ -63,6 +67,8 @@ impl Config {
             .parse::<u16>()
             .map_err(|_| ConfigError::Invalid("PORT"))?;
 
+        let bind_addr = env::var("BIND_ADDR").unwrap_or_else(|_| "0.0.0.0".to_string());
+
         let templates_dir = env::var("TEMPLATES_DIR").unwrap_or_else(|_| "templates".to_string());
         let fonts_dir = env::var("FONTS_DIR").unwrap_or_else(|_| "fonts".to_string());
 
@@ -92,6 +98,7 @@ impl Config {
         Ok(Self {
             database_url,
             port,
+            bind_addr,
             templates_dir,
             fonts_dir,
             max_render_body_bytes,
