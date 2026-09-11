@@ -94,3 +94,30 @@ Done: core service, second template + barcode/QR packages, documents as first-cl
 ## graphify
 
 This project has a knowledge graph at graphify-out/. For codebase questions run `graphify query "<question>"` first; `graphify path "<A>" "<B>"` for relationships; `graphify explain "<concept>"` for focused concepts; read `GRAPH_REPORT.md` only when those fall short. After modifying code, run `graphify update .` (AST-only, no API cost).
+
+## Recent Features & Evolution (Last 30 Days)
+
+### Landed Capabilities
+- **Typst In-Process Engine with ArcSwap Hot Reload**: Embedded `typst-as-lib` compiler wrapped in `Arc<ArcSwap<RenderEngine>>`. Supports runtime template reloading (`POST /api/templates/sync`) and template upload (`POST /api/templates`) without service restarts, eliminating typst-as-lib's static file-caching limitation.
+- **Dynamic Branded Documents & Logo Resolution**: High-fidelity A4 invoices and thermal receipt templates supporting runtime `logoUrl` inputs. Downloads external HTTP/HTTPS images or decodes `data:` URIs into temporary `.rimg_<nanoid>.<ext>` files, compiling through a throwaway one-shot engine (`RenderEngine::compile_once`) with RAII file cleanup so external blobs never enter the shared font/file cache.
+- **Sidecar Data Contracts (`<name>.schema.json`)**: Formal JSON Schema draft-07 contract definitions for every document and label template. Enforces schema validation before compilation (returning structured 422 `RENDER_VALIDATION_FAILED`), mirrored by pre-validation in calling clients (`backend`).
+- **Analytics & Financial Report Templates**: Typst templates for sales summaries, category breakdowns, and audit reports rendered directly to vector PDF.
+- **Desktop Loopback Binding (`BIND_ADDR`)**: Desktop sidecar deployment support via `BIND_ADDR=127.0.0.1` configuration, ensuring the service restricts local listening in Tauri bundles.
+
+### Invariants & Rules for Future Implementations
+- **Strict Sidecar Accompaniment**: Every new `.typ` template placed under `templates/documents/` or `templates/labels/` must ship a corresponding `<name>.schema.json` contract and `<name>.json` sample data. The schema `title` must be human-readable, as it acts as the template's descriptive name.
+- **Zero Cache Bloat on Dynamic Assets**: Never compile dynamic images or user-supplied asset buffers through the shared long-lived `RenderEngine`. Always route external or payload-provided assets through `RenderEngine::compile_once` with cleanup guards.
+- **Internal Authentication Guard**: Every mutating or document-rendering route must require `InternalCaller` and validate `X-Internal-Api-Key`. Never introduce default/fallback API keys in production or testing configuration.
+- **Opaque Template Identity**: Template stems must follow generated prefix formats (`doc_temp_<nanoid>` or `lbl_temp_<nanoid>`). Never expose filesystem paths or raw stems as public user IDs.
+
+### How AI Agents Can Help & Verification
+- **Automated Test Validation**: Run `cargo test` to execute all integration tests (which spin up isolated SQLite instances and mock image servers) and real Typst compilation unit tests.
+- **Strict Static Analysis**:
+  ```bash
+  cargo fmt --check
+  cargo clippy --all-targets --all-features -- -D warnings
+  make check           # Formats, clips, and tests in sequence
+  ```
+- **Template Smoke Compilation**: When editing or adding `.typ` files, agents can run `src/clients/render.rs` unit tests to instantly verify that the Typst compiler successfully parses and renders the templates against sample payloads.
+- **Contract & Spec Sync**: Agents must verify that new routes are added to `tests/openapi_test.rs` and documented in `postman/document-server.postman_collection.json`.
+
