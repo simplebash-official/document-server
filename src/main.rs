@@ -12,9 +12,8 @@ use arc_swap::ArcSwap;
 
 use document_server::{
     app, app::AppState, clients, clients::render::RenderEngine, core::config::Config,
-    modules::templates,
+    core::logging, modules::templates,
 };
-use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
 async fn main() {
@@ -22,12 +21,7 @@ async fn main() {
     // set); `Config::from_env()` below is what actually enforces the
     // required variables are present.
     dotenvy::dotenv().ok();
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| EnvFilter::new("document_server=info,tower_http=info,info")),
-        )
-        .init();
+    logging::init("document_server=info,tower_http=info,info");
 
     let config = Config::from_env().unwrap_or_else(|err| {
         tracing::error!(%err, "invalid configuration");
@@ -35,6 +29,18 @@ async fn main() {
     });
     let port = config.port;
     let bind_addr = config.bind_addr.clone();
+    tracing::info!(
+        category = "lifecycle",
+        event = "startup.config",
+        version = env!("CARGO_PKG_VERSION"),
+        bind_addr = %config.bind_addr,
+        port = config.port,
+        templates_dir = %config.templates_dir,
+        fonts_dir = %config.fonts_dir,
+        remote_image_fetch_enabled = config.remote_image_fetch_enabled,
+        log_settings = ?logging::settings(),
+        "document-server configuration loaded"
+    );
 
     tracing::info!(database_url = %config.database_url, "Opening SQLite database...");
     let db = clients::sqlite::connect(&config.database_url)
@@ -50,13 +56,17 @@ async fn main() {
         fonts_dir = %config.fonts_dir,
         "Warming up render engine..."
     );
+    let warm_up_started = std::time::Instant::now();
     let render =
         RenderEngine::warm_up(&config.templates_dir, &config.fonts_dir).unwrap_or_else(|err| {
             tracing::error!(%err, "failed to warm up render engine");
             std::process::exit(1);
         });
     tracing::info!(
+        category = "render",
+        event = "warm_up",
         templates = ?render.known_templates(),
+        duration_ms = warm_up_started.elapsed().as_millis() as u64,
         "Render engine warmed up"
     );
 

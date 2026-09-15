@@ -213,6 +213,17 @@ impl IntoResponse for AppError {
         // not the internal detail that ended up in `message` here.
         if status.is_server_error() {
             tracing::error!(code = %code, error = %message, "internal server error");
+        } else {
+            // 4xx (bad payload, unknown template, missing key) is still part
+            // of what happened to a render.
+            tracing::warn!(
+                category = "error",
+                event = "client_error",
+                status = status.as_u16(),
+                code = %code,
+                error = %message,
+                "request rejected"
+            );
         }
 
         let body = ErrorResponse {
@@ -233,6 +244,7 @@ impl IntoResponse for AppError {
 // never something the caller can act on — it's always a 500.
 impl From<sqlx::Error> for AppError {
     fn from(err: sqlx::Error) -> Self {
+        tracing::error!(category = "db", event = "error", error = %err, "SQLite error");
         AppError::internal(err.to_string())
     }
 }
@@ -241,6 +253,7 @@ impl From<sqlx::Error> for AppError {
 // failure here is a bug in our own types, never bad caller input.
 impl From<serde_json::Error> for AppError {
     fn from(err: serde_json::Error) -> Self {
+        tracing::error!(category = "error", event = "serialization", error = %err, "JSON serialization error");
         AppError::internal(err.to_string())
     }
 }

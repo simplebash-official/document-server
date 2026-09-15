@@ -11,7 +11,7 @@ use sqlx::SqlitePool;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions};
 
 pub async fn connect(database_url: &str) -> Result<SqlitePool, sqlx::Error> {
-    let options = SqliteConnectOptions::from_str(database_url)?
+    let options = with_statement_logging(SqliteConnectOptions::from_str(database_url)?)
         .create_if_missing(true)
         // WAL allows concurrent readers alongside a writer, which matters
         // here since `SqlitePoolOptions` hands out more than one connection
@@ -28,6 +28,23 @@ pub async fn connect(database_url: &str) -> Result<SqlitePool, sqlx::Error> {
     create_schema(&pool).await?;
 
     Ok(pool)
+}
+
+/// Applies `LOG_SQL`: `all` logs every statement at INFO (inside the request
+/// span), `slow` only statements over 250 ms at WARN, `off` none.
+fn with_statement_logging(options: SqliteConnectOptions) -> SqliteConnectOptions {
+    use crate::core::logging::{SqlLogging, settings};
+    use sqlx::ConnectOptions;
+    let slow = std::time::Duration::from_millis(250);
+    match settings().sql {
+        SqlLogging::All => options
+            .log_statements(log::LevelFilter::Info)
+            .log_slow_statements(log::LevelFilter::Warn, slow),
+        SqlLogging::Slow => options
+            .log_statements(log::LevelFilter::Off)
+            .log_slow_statements(log::LevelFilter::Warn, slow),
+        SqlLogging::Off => options.disable_statement_logging(),
+    }
 }
 
 async fn create_schema(pool: &SqlitePool) -> Result<(), sqlx::Error> {
