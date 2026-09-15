@@ -23,7 +23,13 @@ tokio = { version = "1.53.1", features = ["full"] }
 tower = { version = "0.5.3", features = ["util"] }
 tower-http = { version = "0.7.0", features = ["cors", "trace"] }
 tracing = "0.1.44"
-tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+# `json` + `chrono`: LOG_FORMAT=json emits local-offset JSON lines for the
+# desktop activity log (see `core::logging`).
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json", "chrono"] }
+# sqlx takes a `log::LevelFilter` for statement logging (`LOG_SQL`).
+log = "0.4"
+# Secret redaction patterns in `core::logging::redact`.
+regex = "1"
 utoipa = { version = "5.5.0", features = ["axum_extras", "chrono"] }
 utoipa-axum = "0.2.0"
 utoipa-swagger-ui = { version = "9.0.2", features = ["axum", "reqwest"] }

@@ -85,6 +85,45 @@ pub(crate) async fn render_template(
     template_key: &str,
     data: serde_json::Value,
 ) -> AppResult<(Vec<u8>, String)> {
+    let started = std::time::Instant::now();
+    let payload_bytes = data.to_string().len();
+    tracing::info!(
+        category = "render",
+        event = "start",
+        template_key,
+        payload_bytes,
+        "render requested"
+    );
+    let result = render_template_inner(db, render, cfg, template_key, data).await;
+    let duration_ms = started.elapsed().as_millis() as u64;
+    match &result {
+        Ok((pdf, key)) => tracing::info!(
+            category = "render",
+            event = "done",
+            template_key = %key,
+            pdf_bytes = pdf.len(),
+            duration_ms,
+            "render completed"
+        ),
+        Err(err) => tracing::warn!(
+            category = "render",
+            event = "failed",
+            template_key,
+            error = %err,
+            duration_ms,
+            "render failed"
+        ),
+    }
+    result
+}
+
+async fn render_template_inner(
+    db: &SqlitePool,
+    render: &RenderEngine,
+    cfg: &Config,
+    template_key: &str,
+    data: serde_json::Value,
+) -> AppResult<(Vec<u8>, String)> {
     let template = templates::service::get_active_template_by_key(db, template_key).await?;
 
     // Stored shared/static blobs are merged under the request payload
@@ -134,7 +173,15 @@ pub(crate) async fn compile_pdf(
     mut data: serde_json::Value,
 ) -> AppResult<Vec<u8>> {
     if let Some(data_schema) = data_schema {
-        validate_against_schema(data_schema, &data)?;
+        validate_against_schema(data_schema, &data).inspect_err(|err| {
+            tracing::warn!(
+                category = "render",
+                event = "schema_invalid",
+                template_name,
+                error = %err,
+                "render payload failed schema validation"
+            );
+        })?;
     }
 
     let logo_url = data
@@ -189,6 +236,17 @@ pub(crate) async fn compile_pdf(
 }
 
 fn map_typst_error(err: TypstEngineError) -> AppError {
+    let (stage, detail) = match &err {
+        TypstEngineError::Compile(msg) => ("compile", msg),
+        TypstEngineError::Export(msg) => ("export", msg),
+    };
+    tracing::error!(
+        category = "render",
+        event = "typst_error",
+        stage,
+        error = %detail,
+        "Typst {stage} failed"
+    );
     match err {
         TypstEngineError::Compile(msg) => {
             AppError::unprocessable_entity(codes::RENDER_VALIDATION_FAILED, msg)

@@ -108,6 +108,11 @@ pub fn build_router(state: AppState) -> Router {
         .merge(SwaggerUi::new("/docs").url("/api-docs/openapi.json", openapi))
         .layer(cors)
         .layer(trace)
+        // Outermost: every layer below and every handler log line runs
+        // inside this request's span (request_id / caller).
+        .layer(axum::middleware::from_fn(
+            crate::core::logging::request::log_requests,
+        ))
         .with_state(state)
 }
 
