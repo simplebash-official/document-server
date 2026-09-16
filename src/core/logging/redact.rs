@@ -56,9 +56,50 @@ pub fn redact_value(value: &mut Value) {
     }
 }
 
+/// `"key": value` pairs in raw JSON text, for redacting a body too large to
+/// parse. The key is checked with `is_sensitive_key`, same as the full rule.
+fn json_pair_re() -> &'static Regex {
+    static RE: OnceLock<Regex> = OnceLock::new();
+    RE.get_or_init(|| {
+        Regex::new(r#""((?:[^"\\]|\\.)*)"(\s*:\s*)("(?:[^"\\]|\\.)*"|-?\d[\d.eE+-]*|true|false)"#)
+            .expect("valid regex")
+    })
+}
+
+/// Secret-scrub raw JSON text without parsing it: masks the value of every
+/// sensitive key and every secret-shaped string.
+pub fn redact_json_text(text: &str) -> String {
+    let masked = json_pair_re().replace_all(text, |caps: &regex::Captures| {
+        if is_sensitive_key(&caps[1]) {
+            format!("\"{}\"{}\"{REDACTED}\"", &caps[1], &caps[2])
+        } else {
+            caps[0].to_string()
+        }
+    });
+    redact_text(&masked)
+}
+
+/// Bodies larger than this multiple of the cap are never parsed: only their
+/// first `cap` bytes are scrubbed as text, so logging a multi-MB body costs
+/// O(cap) instead of a full parse + re-serialize.
+const PARSE_LIMIT_FACTOR: usize = 4;
+
 /// Render a captured body for the log: JSON is redacted and re-serialized,
 /// other text is secret-scrubbed; both are capped at `cap` bytes.
 pub fn body_for_log(bytes: &[u8], cap: usize) -> String {
+    if bytes.len() > cap.saturating_mul(PARSE_LIMIT_FACTOR) {
+        let mut end = cap.min(bytes.len());
+        // Don't split a UTF-8 sequence.
+        while end > 0 && end < bytes.len() && (bytes[end] & 0b1100_0000) == 0b1000_0000 {
+            end -= 1;
+        }
+        let prefix = String::from_utf8_lossy(&bytes[..end]);
+        return format!(
+            "{}…[truncated, {} bytes total]",
+            redact_json_text(&prefix),
+            bytes.len()
+        );
+    }
     let rendered = match serde_json::from_slice::<Value>(bytes) {
         Ok(mut json) => {
             redact_value(&mut json);
@@ -106,13 +147,44 @@ mod tests {
     }
 
     #[test]
+    fn huge_bodies_are_scrubbed_as_text_without_parsing() {
+        let mut body = String::from(r#"{"email":"a@b.c","adminPassword":"hunter2","items":["#);
+        for i in 0..20_000 {
+            body.push_str(&format!(
+                r#"{{"key":"prod_{i}","api_key":"k{i}","name":"Item"}},"#
+            ));
+        }
+        body.push_str("{}]}");
+        let out = body_for_log(body.as_bytes(), 1024);
+        // cap + growth from "[REDACTED]" replacements + the size suffix
+        assert!(out.len() < 1024 + 512, "capped: {}", out.len());
+        assert!(out.contains("a@b.c"));
+        assert!(!out.contains("hunter2"));
+        assert!(!out.contains("\"k0\""));
+        assert!(out.contains("bytes total]"));
+    }
+
+    #[test]
+    fn json_text_redaction_checks_whole_keys() {
+        let out = redact_json_text(r#"{"shipping":"fast","pin":1234,"token":"abc","n":5}"#);
+        assert!(out.contains(r#""shipping":"fast""#));
+        assert!(out.contains(r#""pin":"[REDACTED]""#));
+        assert!(out.contains(r#""token":"[REDACTED]""#));
+        assert!(out.contains(r#""n":5"#));
+    }
+
+    #[test]
     fn body_for_log_redacts_and_caps() {
         let body = br#"{"email":"a@b.c","password":"p"}"#;
         let out = body_for_log(body, 1024);
         assert!(out.contains("a@b.c") && out.contains(REDACTED) && !out.contains("\"p\""));
 
+        // Within 4x the cap: parsed, redacted, then cut.
+        let medium = format!("{{\"note\":\"{}\"}}", "x".repeat(60));
+        assert!(body_for_log(medium.as_bytes(), 20).ends_with("…[truncated]"));
+        // Beyond 4x the cap: scrubbed as text, never parsed.
         let long = format!("{{\"note\":\"{}\"}}", "x".repeat(100));
-        assert!(body_for_log(long.as_bytes(), 20).ends_with("…[truncated]"));
+        assert!(body_for_log(long.as_bytes(), 20).ends_with("bytes total]"));
 
         let jwt = "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1In0.sig";
         assert!(!body_for_log(jwt.as_bytes(), 1024).contains("eyJhbGci"));
