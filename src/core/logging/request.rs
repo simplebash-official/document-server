@@ -62,7 +62,7 @@ fn should_capture(headers: &HeaderMap, body: &Body) -> bool {
     let length = header_str(headers, header::CONTENT_LENGTH)
         .and_then(|l| l.parse::<u64>().ok())
         .or_else(|| body.size_hint().exact());
-    settings().http_bodies
+    settings().http_bodies()
         && is_textual(content_type.as_deref())
         && length.is_some_and(|l| l <= MAX_BUFFERED_BODY_BYTES)
 }

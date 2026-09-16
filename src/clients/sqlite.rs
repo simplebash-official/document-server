@@ -30,21 +30,23 @@ pub async fn connect(database_url: &str) -> Result<SqlitePool, sqlx::Error> {
     Ok(pool)
 }
 
-/// Applies `LOG_SQL`: `all` logs every statement at INFO (inside the request
-/// span), `slow` only statements over 250 ms at WARN, `off` none.
+/// Wires sqlx statement logging unless the process started with
+/// `LOG_SQL=off`. Which statements actually reach the log is then decided per
+/// event by the runtime filter in `core::logging::init`, so a `log_mode`
+/// control line can switch between every statement, slow-only and none
+/// without reconnecting the pool.
 fn with_statement_logging(options: SqliteConnectOptions) -> SqliteConnectOptions {
     use crate::core::logging::{SqlLogging, settings};
     use sqlx::ConnectOptions;
-    let slow = std::time::Duration::from_millis(250);
-    match settings().sql {
-        SqlLogging::All => options
-            .log_statements(log::LevelFilter::Info)
-            .log_slow_statements(log::LevelFilter::Warn, slow),
-        SqlLogging::Slow => options
-            .log_statements(log::LevelFilter::Off)
-            .log_slow_statements(log::LevelFilter::Warn, slow),
-        SqlLogging::Off => options.disable_statement_logging(),
+    if settings().sql_at_startup == SqlLogging::Off {
+        return options.disable_statement_logging();
     }
+    options
+        .log_statements(log::LevelFilter::Info)
+        .log_slow_statements(
+            log::LevelFilter::Warn,
+            std::time::Duration::from_millis(250),
+        )
 }
 
 async fn create_schema(pool: &SqlitePool) -> Result<(), sqlx::Error> {
