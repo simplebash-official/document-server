@@ -10,7 +10,7 @@
 //                          `reqwest::Client`; remote images are rare).
 //   - `data:image/…;base64,…` — `decode_data_uri`: no network at all, just
 //                          a base64 decode (a shop that stores its logo
-//                          inline, e.g. jana2u-pos's `shopProfile.logoBase64`).
+//                          inline, e.g. MyroLogic POS's `shopProfile.logoBase64`).
 //
 // SSRF note: every caller is `InternalCaller`-gated (the trusted backend is
 // the only one), so the http path's guards are deliberately modest — http(s)

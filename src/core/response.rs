@@ -6,7 +6,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-/// Unified API success response wrapper. Unlike jana2u-pos's backend, no
+/// Unified API success response wrapper. Unlike MyroLogic POS's backend, no
 /// middleware splices a `processingTimeMs` field onto this after the
 /// fact — this service has no such middleware layer, so the JSON shape
 /// below (`{success, data, message}`) is exactly what's sent on the wire.
