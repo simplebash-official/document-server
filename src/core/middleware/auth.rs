@@ -2,7 +2,7 @@
 // `render`/`documents` routes must present the shared secret configured as
 // `Config::internal_api_key` via the `X-Internal-Api-Key` header. This is
 // deliberately not a general auth system (no users, no roles, no tokens) —
-// MyroLogic POS's backend is the only intended caller, and this is what lets
+// SimpleBash POS's backend is the only intended caller, and this is what lets
 // document-server tell "the backend" apart from "anyone on the network" (see
 // spec's Auth section / CLAUDE.md's document-server integration notes).
 
@@ -13,7 +13,7 @@ use crate::{app::AppState, core::constants::codes, core::error::AppError};
 const HEADER_NAME: &str = "X-Internal-Api-Key";
 
 /// Extracting this in a handler's argument list is what gates that route —
-/// the same opt-in-per-handler convention MyroLogic POS's backend uses for
+/// the same opt-in-per-handler convention SimpleBash POS's backend uses for
 /// `CurrentUser`/`AdminUser`, just with one caller-class instead of many.
 pub struct InternalCaller;
 

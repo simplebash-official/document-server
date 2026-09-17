@@ -24,7 +24,7 @@ use crate::{
 /// spec §6.2.
 ///
 /// One field is *not* stored verbatim: a `logoUrl` that is a `data:` URI
-/// (an inline base64 image — MyroLogic POS sends its shop logo this way) is
+/// (an inline base64 image — SimpleBash POS sends its shop logo this way) is
 /// blanked before persisting. Such a blob is tens–hundreds of KB and would
 /// land on every recorded row; the caller is the source of truth for the
 /// logo and simply re-sends it on the next render. An http(s) `logoUrl` is
@@ -76,7 +76,7 @@ pub(crate) async fn get_document_by_key(db: &SqlitePool, key: &str) -> AppResult
 /// `.into_cached()`'d by `typst-as-lib`, so a template edited on disk while
 /// the server keeps running is *not* picked up until a restart. A template
 /// fix followed by a restart benefits every historical document's reprint,
-/// same idea as MyroLogic POS's usual "genuinely fresh, not stale" guarantees,
+/// same idea as SimpleBash POS's usual "genuinely fresh, not stale" guarantees,
 /// just scoped to "fresh as of last boot" rather than "fresh this instant"
 /// — true hot-reload is unimplemented Phase 4 work (see CLAUDE.md's Build
 /// Phases).

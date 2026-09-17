@@ -22,7 +22,7 @@ Receipt", `doc_temp_5DHl8hUQTX3oLBSR` = "Credit Note", `lbl_temp_qklcWIolwoFFN3x
 "Product Sticker Label".
 
 The A4 Invoice's `logoUrl` field accepts an **http(s) URL** (downloaded at render
-time) **or** a `data:image/…;base64,…` URI (decoded inline, no network) — MyroLogic POS
+time) **or** a `data:image/…;base64,…` URI (decoded inline, no network) — SimpleBash POS
 sends its shop logo the second way. The server turns either into a local file for
 that one compile and discards it; a `data:` `logoUrl` is also blanked from the
 recorded `documents` row so the table doesn't carry the blob.
@@ -31,7 +31,7 @@ recorded `documents` row so the table doesn't carry the blob.
 
 Every `<name>.typ` may have two sidecars, both optional and both read by `scan_templates`:
 
-1. **`<name>.schema.json`** — JSON Schema draft-07 input contract. This is the machine-readable integration surface: it's synced into the `templates.data_schema` column and served as `Template.dataSchema` on `GET /api/templates(/{key})`, and render payloads are validated against it before compilation (`422 RENDER_VALIDATION_FAILED`). Conventions: enforce `required` + field types; keep `"additionalProperties": true` so callers can carry extra context without being rejected. When you add a required field to a `.typ`, update its schema **and** MyroLogic POS's backend builder in the same change — that service pre-validates against the same schema and will refuse to send non-conforming payloads.
+1. **`<name>.schema.json`** — JSON Schema draft-07 input contract. This is the machine-readable integration surface: it's synced into the `templates.data_schema` column and served as `Template.dataSchema` on `GET /api/templates(/{key})`, and render payloads are validated against it before compilation (`422 RENDER_VALIDATION_FAILED`). Conventions: enforce `required` + field types; keep `"additionalProperties": true` so callers can carry extra context without being rejected. When you add a required field to a `.typ`, update its schema **and** SimpleBash POS's backend builder in the same change — that service pre-validates against the same schema and will refuse to send non-conforming payloads.
 2. **`<name>.json`** — worked sample data, exposed as `Template.data`. Documentation only, never enforced.
 
 Historical note: samples once lived in the `data_schema` DB column under a misleading name; the sync pass now writes the real schema there and keeps samples in `sample_data`.

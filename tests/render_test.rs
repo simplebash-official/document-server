@@ -12,7 +12,7 @@ use serde_json::json;
 use tower::ServiceExt;
 
 fn sample_receipt_data() -> serde_json::Value {
-    // Field-for-field what MyroLogic POS's `billing::service::print_payload::
+    // Field-for-field what SimpleBash POS's `billing::service::print_payload::
     // build_thermal_receipt_data` sends — kept in step with
     // thermal-receipt.schema.json, which now rejects incomplete payloads.
     json!({
@@ -202,7 +202,7 @@ async fn render_a4_invoice_returns_pdf_and_records_document() {
             .await
             .expect("a4-invoice template should be synced from disk by spawn_app");
 
-    // Field-for-field what MyroLogic POS's `billing::service::print_payload::
+    // Field-for-field what SimpleBash POS's `billing::service::print_payload::
     // build_a4_invoice_data` sends — kept in step with
     // a4-invoice.schema.json, which now rejects incomplete payloads.
     let body = json!({

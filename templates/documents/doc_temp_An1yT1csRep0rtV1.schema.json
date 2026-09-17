@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Analytics Report",
-  "description": "Input contract for the Analytics & Reports PDF. Every series and table arrives pre-aggregated from the MyroLogic POS backend's reports::service::report_payload builder — see the .typ header comment for the field-by-field description and the sibling .json for a worked example. Shop letterhead (shopName / shopAddressLines / logoUrl) is supplied via stored template-data and merged in at render time.",
+  "description": "Input contract for the Analytics & Reports PDF. Every series and table arrives pre-aggregated from the SimpleBash POS backend's reports::service::report_payload builder — see the .typ header comment for the field-by-field description and the sibling .json for a worked example. Shop letterhead (shopName / shopAddressLines / logoUrl) is supplied via stored template-data and merged in at render time.",
   "type": "object",
   "additionalProperties": true,
   "required": ["generatedAt", "periodLabel", "granularityLabel", "kpis", "timeseries"],
