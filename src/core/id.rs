@@ -2,7 +2,7 @@ use nanoid::nanoid;
 
 /// Generates a unique key prefixed with a model identifier and separated by
 /// an underscore. Format: `<prefix>_<nanoid>` (e.g., `tpl_x7K9mP2...`,
-/// `doc_B8nL1q...`). Unlike jana2u-pos's backend, there is no `local_`-prefix
+/// `doc_B8nL1q...`). Unlike MyroLogic POS's backend, there is no `local_`-prefix
 /// guard here: that assert protects an offline-sync invariant (the frontend
 /// mints provisional `local_`-prefixed keys while offline) that doesn't
 /// exist in this service — document_server has no offline-first client and mints

@@ -59,7 +59,7 @@ impl Config {
         let database_url =
             env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite://document_server.db".to_string());
 
-        // Deliberately not 8080 (jana2u-pos's backend default) — so this
+        // Deliberately not 8080 (MyroLogic POS's backend default) — so this
         // service and that one can both run locally at once without a port
         // collision.
         let port = env::var("PORT")

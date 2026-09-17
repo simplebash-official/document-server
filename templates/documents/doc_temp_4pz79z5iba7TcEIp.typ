@@ -1,7 +1,7 @@
 // =============================================================================
 // THERMAL RECEIPT TEMPLATE (TYPST)
 // =============================================================================
-// Renders the same document jana2u-pos's frontend used to build client-side
+// Renders the same document MyroLogic POS's frontend used to build client-side
 // as `ThermalReceipt.tsx`, fed by `buildPrintPayload.ts`. The backend's
 // `billing::service::print_payload` builds a JSON payload matching the
 // contract below and POSTs it to `/api/render/{templateKey}`.
