@@ -6,7 +6,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: myrologic/document-server
+  IMAGE_NAME: simple-bash/document-server
 
 jobs:
   build-and-push:
@@ -44,7 +44,7 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
-            cd /opt/myrologic
+            cd /opt/simplebash
             
             # Pull the latest document-server image
             docker compose pull document-server

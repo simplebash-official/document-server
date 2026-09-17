@@ -1,7 +1,7 @@
 // =============================================================================
 // ANALYTICS REPORT TEMPLATE (TYPST)
 // =============================================================================
-// The multi-section business analytics PDF for MyroLogic POS's "Analytics &
+// The multi-section business analytics PDF for SimpleBash POS's "Analytics &
 // Reports" screen. The backend's `reports::service::report_payload::
 // build_analytics_report_data` aggregates everything and POSTs a payload
 // matching the contract below to `/api/render/{templateKey}`; this template

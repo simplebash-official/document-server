@@ -2,7 +2,7 @@
 // CREDIT NOTE TEMPLATE (TYPST)
 // =============================================================================
 // Renders a customer-facing Credit Note for a return/refund/exchange, backed
-// by MyroLogic POS's `CreditNote` domain (a linked document against an invoice,
+// by SimpleBash POS's `CreditNote` domain (a linked document against an invoice,
 // never a mutation of the invoice itself — see backend CLAUDE.md's Credit
 // Note section). The backend's `billing::service::print_payload` builds a
 // JSON payload matching the contract below and POSTs it to

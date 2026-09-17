@@ -68,7 +68,7 @@ async fn test_standard_app_error_defaults() {
     assert_eq!(json["statusCode"], 404);
 }
 
-/// Regression guard for the one deliberate deviation from MyroLogic POS's
+/// Regression guard for the one deliberate deviation from SimpleBash POS's
 /// `AppError` status mapping this service makes: `unprocessable_entity`
 /// (used by `modules::render::service` for a Typst compile failure) must
 /// produce 422, not `Validation`'s normal 400 — see spec §4/§6.2 and

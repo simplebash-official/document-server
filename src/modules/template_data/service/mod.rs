@@ -100,7 +100,7 @@ pub(crate) async fn delete_template_data(
 /// returning the combined render input. Merge order is deterministic
 /// (`data_key` ASC), and the request payload wins over any stored field —
 /// so a caller can always override per-request what the server stores as a
-/// default (this is what keeps MyroLogic POS's per-invoice shop snapshots
+/// default (this is what keeps SimpleBash POS's per-invoice shop snapshots
 /// authoritative over anything stored here).
 ///
 /// Objects merge recursively; arrays and scalars replace wholesale. An

@@ -12,8 +12,8 @@ use utoipa::{
 #[openapi(
     modifiers(&SecurityAddon),
     info(
-        title = "MyroLogic POS document-server API",
-        description = "Standalone Typst-based document rendering service for MyroLogic POS: renders a named template against a JSON payload and returns a PDF. The render/documents routes require an X-Internal-Api-Key header — MyroLogic POS's backend is the only intended caller, the frontend never calls this service directly.",
+        title = "SimpleBash POS document-server API",
+        description = "Standalone Typst-based document rendering service for SimpleBash POS: renders a named template against a JSON payload and returns a PDF. The render/documents routes require an X-Internal-Api-Key header — SimpleBash POS's backend is the only intended caller, the frontend never calls this service directly.",
         version = "0.1.0"
     ),
     tags(
@@ -29,7 +29,7 @@ pub struct ApiDoc;
 
 /// Registers the `internalApiKey` security scheme referenced by the
 /// `render`/`documents` routes' `security(("internalApiKey" = []))`
-/// annotations — mirrors MyroLogic POS's backend `SecurityAddon`, just for a
+/// annotations — mirrors SimpleBash POS's backend `SecurityAddon`, just for a
 /// single shared-secret header instead of a bearer JWT.
 struct SecurityAddon;
 
