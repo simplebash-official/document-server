@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: simple-bash/document-server:latest
+    image: simplebash-official/document-server:latest
     container_name: document-server
     restart: unless-stopped
     ports:

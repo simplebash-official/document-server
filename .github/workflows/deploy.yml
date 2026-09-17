@@ -6,7 +6,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: simple-bash/document-server
+  IMAGE_NAME: simplebash-official/document-server
 
 jobs:
   build-and-push:
