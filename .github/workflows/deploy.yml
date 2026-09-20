@@ -10,6 +10,7 @@ env:
 
 jobs:
   build-and-push:
+    if: github.repository == 'simplebash-official/document-server'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -35,6 +36,7 @@ jobs:
 
   deploy:
     needs: build-and-push
+    if: github.repository == 'simplebash-official/document-server'
     runs-on: ubuntu-latest
     steps:
       - name: Execute deployment via SSH
