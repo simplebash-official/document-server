@@ -78,12 +78,18 @@ pub(crate) fn validate_against_schema(
 /// `template_key` echoed back today, but returning it from here rather than
 /// having the route handler assume the input `template_key` is always
 /// exactly what got rendered keeps this the one source of truth).
+///
+/// `tenant_key` (`""` for single-shop/desktop — `core::middleware::auth::
+/// TenantKey::as_column`) scopes both the stored-`template_data` merge and
+/// the recorded `documents` row to the calling tenant, since the multi-tenant
+/// cloud shares one document-server instance across every tenant.
 pub(crate) async fn render_template(
     db: &SqlitePool,
     render: &RenderEngine,
     cfg: &Config,
     template_key: &str,
     data: serde_json::Value,
+    tenant_key: &str,
 ) -> AppResult<(Vec<u8>, String)> {
     let started = std::time::Instant::now();
     let payload_bytes = data.to_string().len();
@@ -94,7 +100,7 @@ pub(crate) async fn render_template(
         payload_bytes,
         "render requested"
     );
-    let result = render_template_inner(db, render, cfg, template_key, data).await;
+    let result = render_template_inner(db, render, cfg, template_key, data, tenant_key).await;
     let duration_ms = started.elapsed().as_millis() as u64;
     match &result {
         Ok((pdf, key)) => tracing::info!(
@@ -123,6 +129,7 @@ async fn render_template_inner(
     cfg: &Config,
     template_key: &str,
     data: serde_json::Value,
+    tenant_key: &str,
 ) -> AppResult<(Vec<u8>, String)> {
     let template = templates::service::get_active_template_by_key(db, template_key).await?;
 
@@ -132,7 +139,8 @@ async fn render_template_inner(
     // payload: a reprint re-applies the merge, so updates to stored data
     // flow into reprints the same way template edits do.
     let compiled_input =
-        template_data::service::merge_into_payload(db, &template.name, data.clone()).await?;
+        template_data::service::merge_into_payload(db, tenant_key, &template.name, data.clone())
+            .await?;
 
     // Validation (and any `logoUrl` fetch) lives inside `compile_pdf`, so
     // this path and the reprint path enforce the contract identically.
@@ -145,7 +153,8 @@ async fn render_template_inner(
     )
     .await?;
 
-    documents::service::record_document(db, &template.key, data, pdf_bytes.len() as i64).await?;
+    documents::service::record_document(db, tenant_key, &template.key, data, pdf_bytes.len() as i64)
+        .await?;
 
     Ok((pdf_bytes, template.key))
 }

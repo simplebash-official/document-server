@@ -84,6 +84,7 @@ async fn create_schema(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS documents (
             key TEXT PRIMARY KEY,
+            tenant_key TEXT NOT NULL DEFAULT '',
             template_key TEXT NOT NULL,
             data TEXT NOT NULL,
             file_size_bytes INTEGER NOT NULL,
@@ -97,16 +98,105 @@ async fn create_schema(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS template_data (
             key TEXT PRIMARY KEY,
+            tenant_key TEXT NOT NULL DEFAULT '',
             template_name TEXT NOT NULL,
             data_key TEXT NOT NULL,
             data TEXT NOT NULL,
             created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL,
-            UNIQUE (template_name, data_key)
+            updated_at TEXT NOT NULL
         )",
     )
     .execute(pool)
     .await?;
 
+    // Tenant scoping for the shared multi-tenant cloud deployment (one
+    // document-server instance behind every tenant of the cloud POS backend).
+    // `tenant_key = ''` is the single-shop/desktop sentinel — that deployment
+    // never sends `X-Tenant-Key` (see `core::middleware::auth`), so its rows
+    // stay under the one implicit tenant they always were. Additive
+    // `ALTER TABLE` for a database created before this column existed,
+    // exactly like `type`/`sample_data` above; the error from a database
+    // that already has the column (freshly created via the literal above) is
+    // expected and ignored.
+    let _ = sqlx::query("ALTER TABLE documents ADD COLUMN tenant_key TEXT NOT NULL DEFAULT ''")
+        .execute(pool)
+        .await;
+    let _ = sqlx::query("ALTER TABLE template_data ADD COLUMN tenant_key TEXT NOT NULL DEFAULT ''")
+        .execute(pool)
+        .await;
+
+    // The ADD COLUMN above does NOT remove the OLD inline
+    // `UNIQUE (template_name, data_key)` constraint on a database created
+    // before tenant scoping existed — SQLite has no `ALTER TABLE DROP
+    // CONSTRAINT`, and that constraint is silently kept in force. Left as-is
+    // it's actively wrong, not just redundant: it would still reject a
+    // second tenant storing under a `(template_name, data_key)` pair another
+    // tenant already used, i.e. exactly the collision tenant scoping exists
+    // to prevent. Detect it via `sqlite_master`'s stored `CREATE TABLE` text
+    // (`ALTER TABLE ADD COLUMN` preserves the original clauses verbatim
+    // elsewhere in that text) and rebuild the table without it — SQLite's
+    // standard create/copy/drop/rename dance, the only way to change a
+    // table's constraints. Idempotent: a database this has already run
+    // against (or one created fresh after tenant scoping shipped) has no
+    // such text to find, so this is a no-op there.
+    if table_has_old_narrow_unique_constraint(pool, "template_data").await? {
+        let mut tx = pool.begin().await?;
+        sqlx::query(
+            "CREATE TABLE template_data_tenant_scoped (
+                key TEXT PRIMARY KEY,
+                tenant_key TEXT NOT NULL DEFAULT '',
+                template_name TEXT NOT NULL,
+                data_key TEXT NOT NULL,
+                data TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )",
+        )
+        .execute(&mut *tx)
+        .await?;
+        sqlx::query(
+            "INSERT INTO template_data_tenant_scoped
+             SELECT key, tenant_key, template_name, data_key, data, created_at, updated_at
+             FROM template_data",
+        )
+        .execute(&mut *tx)
+        .await?;
+        sqlx::query("DROP TABLE template_data")
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("ALTER TABLE template_data_tenant_scoped RENAME TO template_data")
+            .execute(&mut *tx)
+            .await?;
+        tx.commit().await?;
+    }
+
+    // A named index so the `upsert` repository query's
+    // `ON CONFLICT(tenant_key, template_name, data_key)` has a stable target
+    // on every database — freshly created (no inline constraint at all) or
+    // just rebuilt above (same reason).
+    sqlx::query(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_template_data_scope
+         ON template_data (tenant_key, template_name, data_key)",
+    )
+    .execute(pool)
+    .await?;
+
     Ok(())
+}
+
+/// Whether `table`'s original `CREATE TABLE` text (as SQLite still stores it
+/// in `sqlite_master`, `ALTER TABLE ADD COLUMN` notwithstanding) contains the
+/// pre-tenant-scoping inline `UNIQUE (template_name, data_key)` clause. The
+/// exact literal this checks for is the one dropped from the `CREATE TABLE`
+/// call above — keep the two in sync if that literal's spacing ever changes.
+async fn table_has_old_narrow_unique_constraint(
+    pool: &SqlitePool,
+    table: &str,
+) -> Result<bool, sqlx::Error> {
+    let sql: Option<String> =
+        sqlx::query_scalar("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?")
+            .bind(table)
+            .fetch_optional(pool)
+            .await?;
+    Ok(sql.is_some_and(|s| s.contains("UNIQUE (template_name, data_key)")))
 }

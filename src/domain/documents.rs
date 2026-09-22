@@ -17,6 +17,9 @@ use utoipa::ToSchema;
 #[serde(rename_all = "camelCase")]
 pub struct Document {
     pub key: String,
+    /// Tenant this render was performed for (`""` for single-shop/desktop) —
+    /// see `core::middleware::auth::TenantKey`.
+    pub tenant_key: String,
     pub template_key: String,
     pub data: serde_json::Value,
     pub file_size_bytes: i64,

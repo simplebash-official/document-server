@@ -46,10 +46,10 @@ pub fn router() -> OpenApiRouter<AppState> {
     (status = 401, description = "Missing or invalid X-Internal-Api-Key header", body = ErrorResponse),
 ), security(("internalApiKey" = [])))]
 async fn list_documents(
-    _internal: InternalCaller,
+    internal: InternalCaller,
     State(state): State<AppState>,
 ) -> AppResult<Json<ApiResponse<DocumentsResponse>>> {
-    let response = service::list_documents(&state.db).await?;
+    let response = service::list_documents(&state.db, internal.tenant_key.as_column()).await?;
 
     Ok(Json(ApiResponse::success(
         response,

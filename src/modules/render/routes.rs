@@ -76,7 +76,7 @@ async fn status() -> Json<ApiResponse<ModuleStatusResponse>> {
     security(("internalApiKey" = []))
 )]
 async fn render_template(
-    _internal: InternalCaller,
+    internal: InternalCaller,
     State(state): State<AppState>,
     Path(template_key): Path<String>,
     Json(data): Json<serde_json::Value>,
@@ -84,8 +84,15 @@ async fn render_template(
     // `load_full()` snapshots the current engine — a sync endpoint swapping
     // in a rebuilt one mid-request doesn't affect this render.
     let render = state.render.load_full();
-    let (pdf_bytes, _) =
-        service::render_template(&state.db, &render, &state.config, &template_key, data).await?;
+    let (pdf_bytes, _) = service::render_template(
+        &state.db,
+        &render,
+        &state.config,
+        &template_key,
+        data,
+        internal.tenant_key.as_column(),
+    )
+    .await?;
 
     Ok((
         StatusCode::OK,

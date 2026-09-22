@@ -15,6 +15,9 @@ use utoipa::ToSchema;
 #[serde(rename_all = "camelCase")]
 pub struct TemplateData {
     pub key: String,
+    /// Tenant this blob is scoped to (`""` for single-shop/desktop) — see
+    /// `core::middleware::auth::TenantKey`.
+    pub tenant_key: String,
     pub template_name: String,
     pub data_key: String,
     pub data: serde_json::Value,

@@ -16,13 +16,17 @@ use crate::{
     modules::{template_data::repository, templates},
 };
 
-/// Stores (or replaces) one blob for `template_name`. The template must
-/// exist first — a typo'd name should fail loudly here rather than silently
-/// create an orphan blob no render will ever read. Matched by *name* (any
-/// active state): a deactivated template's stored data stays editable, same
-/// as its history stays reprintable.
+/// Stores (or replaces) one blob for `template_name`, scoped to `tenant_key`
+/// (`""` for single-shop/desktop — see `core::middleware::auth::TenantKey`).
+/// The template must exist first — a typo'd name should fail loudly here
+/// rather than silently create an orphan blob no render will ever read.
+/// Matched by *name* (any active state): a deactivated template's stored
+/// data stays editable, same as its history stays reprintable. Templates
+/// themselves are not tenant-scoped (shared disk content across every
+/// tenant), only the blob is.
 pub(crate) async fn set_template_data(
     db: &SqlitePool,
+    tenant_key: &str,
     template_name: &str,
     data_key: &str,
     data: serde_json::Value,
@@ -39,6 +43,7 @@ pub(crate) async fn set_template_data(
     let row = repository::upsert(
         db,
         generate_id(prefixes::TEMPLATE_DATA),
+        tenant_key,
         template_name,
         data_key,
         &data,
@@ -48,14 +53,17 @@ pub(crate) async fn set_template_data(
     Ok(row.into_template_data())
 }
 
-/// Fetches one blob by `(template_name, data_key)` — 404 with
-/// `TEMPLATE_DATA_NOT_FOUND` if absent.
+/// Fetches one blob by `(tenant_key, template_name, data_key)` — 404 with
+/// `TEMPLATE_DATA_NOT_FOUND` if absent (including when it exists, but only
+/// for a *different* tenant — indistinguishable from "never existed" by
+/// design).
 pub(crate) async fn get_template_data(
     db: &SqlitePool,
+    tenant_key: &str,
     template_name: &str,
     data_key: &str,
 ) -> AppResult<TemplateData> {
-    repository::find_by_template_and_key(db, template_name, data_key)
+    repository::find_by_template_and_key(db, tenant_key, template_name, data_key)
         .await?
         .map(|row| row.into_template_data())
         .ok_or_else(|| {
@@ -66,13 +74,14 @@ pub(crate) async fn get_template_data(
         })
 }
 
-/// Every blob stored for one template — backs
+/// Every blob stored for one template *within `tenant_key`* — backs
 /// `GET /api/template-data/{templateName}`.
 pub(crate) async fn list_template_data(
     db: &SqlitePool,
+    tenant_key: &str,
     template_name: &str,
 ) -> AppResult<TemplateDataListResponse> {
-    let rows = repository::list_by_template(db, template_name).await?;
+    let rows = repository::list_by_template(db, tenant_key, template_name).await?;
     Ok(TemplateDataListResponse {
         items: rows
             .into_iter()
@@ -82,36 +91,39 @@ pub(crate) async fn list_template_data(
 }
 
 /// Removes one blob and returns it — 404 `TEMPLATE_DATA_NOT_FOUND` if there
-/// was nothing to delete (delete-of-absent is a caller mistake here, not a
-/// success). Returning the row doubles as the OpenAPI-friendly payload and
-/// confirms *what* was removed, which a bare ok cannot.
+/// was nothing to delete for this tenant (delete-of-absent is a caller
+/// mistake here, not a success). Returning the row doubles as the
+/// OpenAPI-friendly payload and confirms *what* was removed, which a bare ok
+/// cannot.
 pub(crate) async fn delete_template_data(
     db: &SqlitePool,
+    tenant_key: &str,
     template_name: &str,
     data_key: &str,
 ) -> AppResult<TemplateData> {
-    let existing = get_template_data(db, template_name, data_key).await?;
-    repository::delete_by_template_and_key(db, template_name, data_key).await?;
+    let existing = get_template_data(db, tenant_key, template_name, data_key).await?;
+    repository::delete_by_template_and_key(db, tenant_key, template_name, data_key).await?;
 
     Ok(existing)
 }
 
-/// Deep-merges every blob stored for `template_name` under `payload`,
-/// returning the combined render input. Merge order is deterministic
-/// (`data_key` ASC), and the request payload wins over any stored field —
-/// so a caller can always override per-request what the server stores as a
-/// default (this is what keeps SimpleBash POS's per-invoice shop snapshots
-/// authoritative over anything stored here).
+/// Deep-merges every blob stored for `template_name` *within `tenant_key`*
+/// under `payload`, returning the combined render input. Merge order is
+/// deterministic (`data_key` ASC), and the request payload wins over any
+/// stored field — so a caller can always override per-request what the
+/// server stores as a default (this is what keeps SimpleBash POS's
+/// per-invoice shop snapshots authoritative over anything stored here).
 ///
 /// Objects merge recursively; arrays and scalars replace wholesale. An
 /// empty stored set returns the payload untouched — zero overhead and
 /// exactly the pre-feature behavior for templates without stored data.
 pub(crate) async fn merge_into_payload(
     db: &SqlitePool,
+    tenant_key: &str,
     template_name: &str,
     payload: serde_json::Value,
 ) -> AppResult<serde_json::Value> {
-    let rows = repository::list_by_template(db, template_name).await?;
+    let rows = repository::list_by_template(db, tenant_key, template_name).await?;
     if rows.is_empty() {
         return Ok(payload);
     }
