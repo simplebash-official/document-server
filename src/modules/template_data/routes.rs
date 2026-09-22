@@ -62,12 +62,19 @@ pub struct StoredDataBody(pub serde_json::Value);
     security(("internalApiKey" = []))
 )]
 async fn set_template_data(
-    _internal: InternalCaller,
+    internal: InternalCaller,
     State(state): State<AppState>,
     Path((template_name, data_key)): Path<(String, String)>,
     Json(data): Json<serde_json::Value>,
 ) -> AppResult<Json<ApiResponse<TemplateData>>> {
-    let stored = service::set_template_data(&state.db, &template_name, &data_key, data).await?;
+    let stored = service::set_template_data(
+        &state.db,
+        internal.tenant_key.as_column(),
+        &template_name,
+        &data_key,
+        data,
+    )
+    .await?;
 
     Ok(Json(ApiResponse::success(stored, "Template data stored")))
 }
@@ -88,11 +95,17 @@ async fn set_template_data(
     security(("internalApiKey" = []))
 )]
 async fn get_template_data(
-    _internal: InternalCaller,
+    internal: InternalCaller,
     State(state): State<AppState>,
     Path((template_name, data_key)): Path<(String, String)>,
 ) -> AppResult<Json<ApiResponse<TemplateData>>> {
-    let stored = service::get_template_data(&state.db, &template_name, &data_key).await?;
+    let stored = service::get_template_data(
+        &state.db,
+        internal.tenant_key.as_column(),
+        &template_name,
+        &data_key,
+    )
+    .await?;
 
     Ok(Json(ApiResponse::success(
         stored,
@@ -114,11 +127,13 @@ async fn get_template_data(
     security(("internalApiKey" = []))
 )]
 async fn list_template_data(
-    _internal: InternalCaller,
+    internal: InternalCaller,
     State(state): State<AppState>,
     Path(template_name): Path<String>,
 ) -> AppResult<Json<ApiResponse<TemplateDataListResponse>>> {
-    let response = service::list_template_data(&state.db, &template_name).await?;
+    let response =
+        service::list_template_data(&state.db, internal.tenant_key.as_column(), &template_name)
+            .await?;
 
     Ok(Json(ApiResponse::success(
         response,
@@ -142,11 +157,17 @@ async fn list_template_data(
     security(("internalApiKey" = []))
 )]
 async fn delete_template_data(
-    _internal: InternalCaller,
+    internal: InternalCaller,
     State(state): State<AppState>,
     Path((template_name, data_key)): Path<(String, String)>,
 ) -> AppResult<Json<ApiResponse<TemplateData>>> {
-    let deleted = service::delete_template_data(&state.db, &template_name, &data_key).await?;
+    let deleted = service::delete_template_data(
+        &state.db,
+        internal.tenant_key.as_column(),
+        &template_name,
+        &data_key,
+    )
+    .await?;
 
     Ok(Json(ApiResponse::success(deleted, "Template data deleted")))
 }

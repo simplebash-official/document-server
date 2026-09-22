@@ -31,6 +31,7 @@ use crate::{
 /// kept as-is — it's cheap and a reprint needs it.
 pub(crate) async fn record_document(
     db: &SqlitePool,
+    tenant_key: &str,
     template_key: &str,
     mut data: serde_json::Value,
     file_size_bytes: i64,
@@ -42,13 +43,20 @@ pub(crate) async fn record_document(
     }
 
     let key = generate_id(prefixes::DOCUMENT);
-    let row = repository::insert_document(db, &key, template_key, data, file_size_bytes).await?;
+    let row =
+        repository::insert_document(db, &key, tenant_key, template_key, data, file_size_bytes)
+            .await?;
     Ok(row.into_document())
 }
 
-/// Every recorded document, newest first — backs `GET /api/documents`.
-pub(crate) async fn list_documents(db: &SqlitePool) -> AppResult<DocumentsResponse> {
-    let rows = repository::list_documents(db).await?;
+/// Every recorded document belonging to `tenant_key`, newest first — backs
+/// `GET /api/documents`. See `repository::list_documents` for why this is
+/// the one documents-read that IS tenant-scoped.
+pub(crate) async fn list_documents(
+    db: &SqlitePool,
+    tenant_key: &str,
+) -> AppResult<DocumentsResponse> {
+    let rows = repository::list_documents(db, tenant_key).await?;
     Ok(DocumentsResponse {
         documents: rows.into_iter().map(|row| row.into_document()).collect(),
     })
@@ -99,9 +107,19 @@ pub(crate) async fn reprint_document(
     // `render_template`), so the stored-data merge — and any `logoUrl`
     // re-fetch inside `compile_pdf` — re-applies here exactly as it did on
     // the first render. Updates to stored blobs (or to the remote image at
-    // that URL) flow into reprints without touching history.
-    let compiled_input =
-        template_data::service::merge_into_payload(db, &template.name, document.data).await?;
+    // that URL) flow into reprints without touching history. Merged against
+    // the DOCUMENT's own recorded `tenant_key`, not whatever `X-Tenant-Key`
+    // this reprint call happens to carry — a document's key is opaque and
+    // unscoped on lookup (see `DocumentRow::tenant_key`'s doc comment), so
+    // trusting the caller's header here would let a forged/mismatched header
+    // pull a *different* tenant's stored blobs into this reprint.
+    let compiled_input = template_data::service::merge_into_payload(
+        db,
+        &document.tenant_key,
+        &template.name,
+        document.data,
+    )
+    .await?;
 
     render::service::compile_pdf(
         render_engine,

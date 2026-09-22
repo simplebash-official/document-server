@@ -8,6 +8,9 @@ pub const UNAUTHORIZED: &str = "UNAUTHORIZED";
 
 // Internal-caller auth (see `core::middleware::auth::InternalCaller`).
 pub const INTERNAL_API_KEY_INVALID: &str = "INTERNAL_API_KEY_INVALID";
+/// A caller-supplied `X-Tenant-Key` doesn't look like a tenant id (see
+/// `core::middleware::auth::TenantKey`).
+pub const TENANT_KEY_INVALID: &str = "TENANT_KEY_INVALID";
 
 // Render pipeline (see spec §4, §6.2 and `modules::render::service`).
 pub const TEMPLATE_NOT_FOUND: &str = "TEMPLATE_NOT_FOUND";

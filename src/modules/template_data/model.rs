@@ -11,6 +11,11 @@ use crate::domain::template_data::TemplateData;
 #[derive(Debug, Clone, FromRow)]
 pub struct TemplateDataRow {
     pub key: String,
+    /// Tenant scope (`""` = single-shop/desktop) — see
+    /// `core::middleware::auth::TenantKey`. Two tenants (or a tenant and the
+    /// single-shop bucket) may each store a blob under the identical
+    /// `(template_name, data_key)` without colliding or leaking.
+    pub tenant_key: String,
     /// The owning template's *name* (its stable disk identity), not its
     /// `tpl_...` key — callers resolve templates by name when rendering, and
     /// a template's row can be re-synced without changing identity.
@@ -26,6 +31,7 @@ impl TemplateDataRow {
     pub fn into_template_data(self) -> TemplateData {
         TemplateData {
             key: self.key,
+            tenant_key: self.tenant_key,
             template_name: self.template_name,
             data_key: self.data_key,
             data: self.data.0,
