@@ -105,6 +105,8 @@ pub fn build_router(state: AppState) -> Router {
         .split_for_parts();
 
     router
+        .route("/", axum::routing::get(portal))
+        .route("/api", axum::routing::get(portal))
         .merge(SwaggerUi::new("/docs").url("/api-docs/openapi.json", openapi))
         .layer(cors)
         .layer(trace)
@@ -116,14 +118,49 @@ pub fn build_router(state: AppState) -> Router {
         .with_state(state)
 }
 
+const PORTAL_HTML: &str = include_str!("portal.html");
+
+static SERVER_STARTED_AT: std::sync::LazyLock<std::time::Instant> =
+    std::sync::LazyLock::new(std::time::Instant::now);
+
+pub fn server_uptime_seconds() -> u64 {
+    SERVER_STARTED_AT.elapsed().as_secs()
+}
+
+async fn portal(
+    axum::extract::State(state): axum::extract::State<AppState>,
+) -> (
+    [(axum::http::HeaderName, &'static str); 1],
+    axum::response::Html<String>,
+) {
+    let uptime = server_uptime_seconds();
+    let version = env!("CARGO_PKG_VERSION");
+    let env_name = &state.config.app_env;
+    let env_class = if env_name == "production" || env_name == "prod" {
+        "env-prod"
+    } else {
+        "env-dev"
+    };
+
+    let rendered = PORTAL_HTML
+        .replace("__VERSION__", version)
+        .replace("__ENVIRONMENT__", env_name)
+        .replace("__ENV_CLASS__", env_class)
+        .replace("__INITIAL_UPTIME__", &uptime.to_string());
+
+    (
+        [(axum::http::header::CACHE_CONTROL, "no-store")],
+        axum::response::Html(rendered),
+    )
+}
+
 #[utoipa::path(get, path = "/health", tag = "health", responses(
     (status = 200, description = "Service is up", body = ApiResponse<HealthResponse>)
 ))]
-/// Liveness check — always returns 200 if the process is up and able to
-/// handle a request at all. Doesn't touch SQLite or the render engine, so it
-/// can't distinguish "server up, database down"; use a module's own status
-/// route for that. Returns Cache-Control: no-store.
-async fn health() -> (
+/// Liveness check — returns 200 with service health status, live uptime, environment, and version.
+async fn health(
+    axum::extract::State(state): axum::extract::State<AppState>,
+) -> (
     [(axum::http::HeaderName, &'static str); 1],
     Json<ApiResponse<HealthResponse>>,
 ) {
@@ -132,6 +169,9 @@ async fn health() -> (
         Json(ApiResponse::success(
             HealthResponse {
                 status: "ok".to_string(),
+                uptime_seconds: Some(server_uptime_seconds()),
+                environment: Some(state.config.app_env.clone()),
+                version: Some(env!("CARGO_PKG_VERSION").to_string()),
             },
             "Service is healthy",
         )),

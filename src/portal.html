@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SimpleBash Document Engine</title>
+  <style>
+    :root {
+      --bg-dark: #090a10;
+      --bg-surface: rgba(18, 21, 33, 0.72);
+      --bg-surface-hover: rgba(26, 30, 48, 0.88);
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --border-hover: rgba(245, 158, 11, 0.45);
+      --text-main: #ffffff;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      --accent-indigo: #6366f1;
+      --accent-purple: #8b5cf6;
+      --accent-cyan: #38bdf8;
+      --accent-emerald: #10b981;
+      --accent-amber: #f59e0b;
+      --accent-rose: #ef4444;
+      --badge-bg: rgba(245, 158, 11, 0.12);
+      --badge-border: rgba(245, 158, 11, 0.28);
+      --badge-text: #fcd34d;
+      --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background-color: var(--bg-dark);
+      background-image: 
+        radial-gradient(ellipse 900px 600px at 50% 120px, rgba(245, 158, 11, 0.13), transparent 70%),
+        radial-gradient(ellipse 600px 400px at 30% 80%, rgba(239, 68, 68, 0.08), transparent 60%);
+      color: var(--text-main);
+      font-family: var(--font-family);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 60px 24px 80px;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 1080px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .header {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      margin-bottom: 34px;
+    }
+
+    .icon-box {
+      width: 68px;
+      height: 68px;
+      border-radius: 20px;
+      background: linear-gradient(135deg, #f59e0b 0%, #ea580c 50%, #dc2626 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 
+        0 0 24px rgba(245, 158, 11, 0.55),
+        0 0 54px rgba(234, 88, 12, 0.28),
+        inset 0 1px 1px rgba(255, 255, 255, 0.45);
+      margin-bottom: 22px;
+      transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .icon-box:hover { transform: scale(1.06) rotate(-2deg); }
+
+    .icon-box svg {
+      width: 34px;
+      height: 34px;
+      fill: #ffffff;
+      filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+    }
+
+    .service-title {
+      font-size: 32px;
+      font-weight: 700;
+      letter-spacing: -0.025em;
+      color: #ffffff;
+      margin-bottom: 8px;
+    }
+
+    .service-subtitle {
+      font-size: 15.5px;
+      color: var(--text-muted);
+      font-weight: 400;
+      max-width: 560px;
+      line-height: 1.5;
+      margin-bottom: 20px;
+    }
+
+    .waveform-visualizer {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 3.5px;
+      height: 28px;
+      margin-bottom: 12px;
+    }
+
+    .wave-bar {
+      width: 3px;
+      border-radius: 9999px;
+      background: linear-gradient(180deg, #fde047 0%, #f59e0b 100%);
+      animation: wave-pulse 1.4s ease-in-out infinite alternate;
+      will-change: height, opacity;
+    }
+
+    .wave-bar:nth-child(1)  { height: 6px;  animation-delay: 0.1s; }
+    .wave-bar:nth-child(2)  { height: 12px; animation-delay: 0.3s; }
+    .wave-bar:nth-child(3)  { height: 18px; animation-delay: 0.15s; }
+    .wave-bar:nth-child(4)  { height: 26px; animation-delay: 0.4s; }
+    .wave-bar:nth-child(5)  { height: 15px; animation-delay: 0.2s; }
+    .wave-bar:nth-child(6)  { height: 28px; animation-delay: 0.05s; }
+    .wave-bar:nth-child(7)  { height: 22px; animation-delay: 0.35s; }
+    .wave-bar:nth-child(8)  { height: 14px; animation-delay: 0.25s; }
+    .wave-bar:nth-child(9)  { height: 24px; animation-delay: 0.45s; }
+    .wave-bar:nth-child(10) { height: 16px; animation-delay: 0.18s; }
+    .wave-bar:nth-child(11) { height: 7px;  animation-delay: 0.32s; }
+
+    @keyframes wave-pulse {
+      0% { transform: scaleY(0.4); opacity: 0.6; }
+      50% { opacity: 1; }
+      100% { transform: scaleY(1.15); opacity: 0.85; }
+    }
+
+    .waveform-visualizer.activity-boost .wave-bar {
+      animation-duration: 0.35s;
+      background: linear-gradient(180deg, #38bdf8 0%, #f59e0b 100%);
+    }
+
+    .metrics-pill {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: 16px;
+      padding: 16px 36px;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      width: 100%;
+      max-width: 640px;
+      margin-bottom: 48px;
+      box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.4);
+    }
+
+    .metric-col {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+      flex: 1;
+      position: relative;
+    }
+
+    .metric-col:not(:last-child)::after {
+      content: "";
+      position: absolute;
+      right: 0;
+      top: 15%;
+      height: 70%;
+      width: 1px;
+      background: rgba(255, 255, 255, 0.07);
+    }
+
+    .metric-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      color: var(--text-dim);
+      text-transform: uppercase;
+    }
+
+    .metric-value {
+      font-size: 14.5px;
+      font-weight: 600;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .status-indicator {
+      position: relative;
+      display: inline-flex;
+      width: 9px;
+      height: 9px;
+    }
+
+    .status-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background-color: var(--accent-emerald);
+      transition: background-color 0.3s;
+    }
+
+    .status-ring {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      background-color: var(--accent-emerald);
+      opacity: 0.75;
+      animation: ping-pulse 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+    }
+
+    @keyframes ping-pulse {
+      0% { transform: scale(1); opacity: 0.8; }
+      75%, 100% { transform: scale(2.4); opacity: 0; }
+    }
+
+    .status-operational .status-dot, .status-operational .status-ring { background-color: var(--accent-emerald); }
+    .status-degraded .status-dot, .status-degraded .status-ring { background-color: var(--accent-amber); }
+    .status-offline .status-dot, .status-offline .status-ring { background-color: var(--accent-rose); }
+
+    .latency-pill {
+      font-size: 11.5px;
+      font-weight: 500;
+      padding: 1px 7px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+
+    .env-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 10px;
+      border-radius: 9999px;
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .env-dev {
+      background: rgba(245, 158, 11, 0.12);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      color: #fbbf24;
+    }
+    .env-prod {
+      background: rgba(16, 185, 129, 0.12);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      color: #34d399;
+    }
+
+    .cards-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+      width: 100%;
+      margin-bottom: 48px;
+    }
+
+    .card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: 18px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      text-decoration: none;
+      color: inherit;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: 18px;
+      padding: 1px;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.12), transparent 60%);
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      pointer-events: none;
+    }
+
+    .card:hover {
+      transform: translateY(-4px);
+      background: var(--bg-surface-hover);
+      border-color: var(--border-hover);
+      box-shadow: 0 16px 36px -8px rgba(0, 0, 0, 0.5), 0 0 20px -3px rgba(245, 158, 11, 0.3);
+    }
+
+    .card-icon-wrapper {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 18px;
+    }
+
+    .card-icon-wrapper svg { width: 22px; height: 22px; }
+
+    .icon-blue   { background: rgba(59, 130, 246, 0.12); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.25); }
+    .icon-green  { background: rgba(16, 185, 129, 0.12); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.25); }
+    .icon-amber  { background: rgba(245, 158, 11, 0.12); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.25); }
+    .icon-rose   { background: rgba(244, 63, 94, 0.12); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.25); }
+    .icon-purple { background: rgba(168, 85, 247, 0.12); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.25); }
+    .icon-cyan   { background: rgba(6, 182, 212, 0.12); color: #22d3ee; border: 1px solid rgba(6, 182, 212, 0.25); }
+
+    .card-title {
+      font-size: 17px;
+      font-weight: 600;
+      color: var(--text-main);
+      margin-bottom: 8px;
+    }
+
+    .card-desc {
+      font-size: 13.5px;
+      color: var(--text-muted);
+      line-height: 1.55;
+      margin-bottom: 22px;
+      flex-grow: 1;
+    }
+
+    .route-badge {
+      align-self: flex-start;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--badge-bg);
+      border: 1px solid var(--badge-border);
+      color: var(--badge-text);
+      padding: 5px 10px;
+      border-radius: 8px;
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+
+    .card:hover .route-badge {
+      background: rgba(245, 158, 11, 0.22);
+      border-color: rgba(245, 158, 11, 0.45);
+      color: #ffffff;
+    }
+
+    .badge-method {
+      font-size: 10px;
+      font-weight: 700;
+      color: #f59e0b;
+      background: rgba(0, 0, 0, 0.25);
+      padding: 1px 4px;
+      border-radius: 4px;
+    }
+
+    .portal-footer {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      color: var(--text-dim);
+      font-size: 13px;
+    }
+
+    .portal-footer a {
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    .portal-footer a:hover { color: var(--text-main); }
+
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(5, 6, 12, 0.75);
+      backdrop-filter: blur(8px);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .modal-backdrop.active { display: flex; }
+
+    .modal-card {
+      background: #121524;
+      border: 1px solid var(--border-hover);
+      border-radius: 18px;
+      max-width: 540px;
+      width: 100%;
+      padding: 28px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7);
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 18px;
+    }
+
+    .modal-title { font-size: 18px; font-weight: 600; }
+
+    .modal-close {
+      background: none;
+      border: none;
+      color: var(--text-dim);
+      cursor: pointer;
+      font-size: 20px;
+    }
+
+    .modal-body pre {
+      background: #090a12;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      padding: 14px;
+      color: #fbbf24;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      overflow-x: auto;
+      margin: 14px 0;
+    }
+
+    @media (max-width: 960px) {
+      .cards-grid { grid-template-columns: repeat(2, 1fr); }
+      .metrics-pill { padding: 14px 24px; }
+    }
+
+    @media (max-width: 640px) {
+      body { padding: 40px 16px 60px; }
+      .service-title { font-size: 26px; }
+      .cards-grid { grid-template-columns: 1fr; }
+      .metrics-pill { flex-direction: column; gap: 16px; padding: 20px; }
+      .metric-col:not(:last-child)::after { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <div class="icon-box">
+        <svg viewBox="0 0 24 24">
+          <path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/>
+        </svg>
+      </div>
+      <h1 class="service-title">SimpleBash Document Engine</h1>
+      <p class="service-subtitle">High-Performance Typst PDF, Invoice, Barcode &amp; Receipt Generation</p>
+
+      <div class="waveform-visualizer" id="waveform">
+        <div class="wave-bar"></div>
+        <div class="wave-bar"></div>
+        <div class="wave-bar"></div>
+        <div class="wave-bar"></div>
+        <div class="wave-bar"></div>
+        <div class="wave-bar"></div>
+        <div class="wave-bar"></div>
+        <div class="wave-bar"></div>
+        <div class="wave-bar"></div>
+        <div class="wave-bar"></div>
+        <div class="wave-bar"></div>
+      </div>
+    </header>
+
+    <section class="metrics-pill">
+      <div class="metric-col">
+        <span class="metric-label">STATUS</span>
+        <div class="metric-value">
+          <span class="status-indicator status-operational" id="status-indicator">
+            <span class="status-ring"></span>
+            <span class="status-dot"></span>
+          </span>
+          <span id="status-text">Operational</span>
+          <span class="latency-pill" id="latency-text">--ms</span>
+        </div>
+      </div>
+
+      <div class="metric-col">
+        <span class="metric-label">UPTIME</span>
+        <div class="metric-value">
+          <span id="uptime-ticker" style="font-family: var(--font-mono);">0s</span>
+        </div>
+      </div>
+
+      <div class="metric-col">
+        <span class="metric-label">VERSION</span>
+        <div class="metric-value" id="version-text">__VERSION__</div>
+      </div>
+
+      <div class="metric-col">
+        <span class="metric-label">ENVIRONMENT</span>
+        <div class="metric-value">
+          <span class="env-tag __ENV_CLASS__" id="env-badge" title="Click for runtime diagnostics">
+            <span id="env-text">__ENVIRONMENT__</span>
+          </span>
+        </div>
+      </div>
+    </section>
+
+    <main class="cards-grid">
+      <!-- 1. API Documentation -->
+      <a href="/docs" class="card">
+        <div class="card-icon-wrapper icon-blue">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+          </svg>
+        </div>
+        <h3 class="card-title">API Documentation</h3>
+        <p class="card-desc">Interactive Swagger UI with Typst schema specs, model documentation, and try-it-out testing.</p>
+        <span class="route-badge"><span>/docs</span></span>
+      </a>
+
+      <!-- 2. Health & Warm-up -->
+      <a href="/api/health" class="card" target="_blank">
+        <div class="card-icon-wrapper icon-green">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+          </svg>
+        </div>
+        <h3 class="card-title">Render Health &amp; Warm-up</h3>
+        <p class="card-desc">Verify Typst engine pre-compilation status, font parser readiness, and template cache.</p>
+        <span class="route-badge"><span class="badge-method">GET</span><span>/api/health</span></span>
+      </a>
+
+      <!-- 3. Typst PDF Rendering -->
+      <a href="/api/render" class="card">
+        <div class="card-icon-wrapper icon-rose">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/>
+            <line x1="16" y1="17" x2="8" y2="17"/>
+            <polyline points="10 9 9 9 8 9"/>
+          </svg>
+        </div>
+        <h3 class="card-title">Typst PDF Rendering</h3>
+        <p class="card-desc">Compile multi-page PDF tax invoices, thermal sales receipts, and analytics audit documents.</p>
+        <span class="route-badge"><span class="badge-method">POST</span><span>/api/render</span></span>
+      </a>
+
+      <!-- 4. Template Registry -->
+      <a href="/api/templates" class="card">
+        <div class="card-icon-wrapper icon-amber">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+            <line x1="3" y1="9" x2="21" y2="9"/>
+            <line x1="9" y1="21" x2="9" y2="9"/>
+          </svg>
+        </div>
+        <h3 class="card-title">Template Registry</h3>
+        <p class="card-desc">Inspect registered Typst templates for 58mm/80mm thermal printers, stickers, and A4 reports.</p>
+        <span class="route-badge"><span class="badge-method">GET</span><span>/api/templates</span></span>
+      </a>
+
+      <!-- 5. Barcode Generator -->
+      <a href="/api/barcodes" class="card">
+        <div class="card-icon-wrapper icon-purple">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 5v14M8 5v14M12 5v14M17 5v14M21 5v14"/>
+          </svg>
+        </div>
+        <h3 class="card-title">Barcode Generator</h3>
+        <p class="card-desc">Vector SVG and raster Code128, EAN-13, and UPC barcode image generation microservice.</p>
+        <span class="route-badge"><span class="badge-method">POST</span><span>/api/barcodes</span></span>
+      </a>
+
+      <!-- 6. QR Code Engine -->
+      <a href="/api/qrcodes" class="card">
+        <div class="card-icon-wrapper icon-cyan">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="7" height="7"/>
+            <rect x="14" y="3" width="7" height="7"/>
+            <rect x="14" y="14" width="7" height="7"/>
+            <rect x="3" y="14" width="7" height="7"/>
+          </svg>
+        </div>
+        <h3 class="card-title">QR Code Engine</h3>
+        <p class="card-desc">High-precision vector QR code generation for digital payments, invoice lookups, and Wi-Fi pairing.</p>
+        <span class="route-badge"><span class="badge-method">POST</span><span>/api/qrcodes</span></span>
+      </a>
+    </main>
+
+    <footer class="portal-footer">
+      <span>SimpleBash Document Server</span>
+      <span>•</span>
+      <span>Powered by Typst &amp; Axum</span>
+      <span>•</span>
+      <a href="/docs">OpenAPI Spec</a>
+    </footer>
+  </div>
+
+  <div class="modal-backdrop" id="env-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 class="modal-title">Engine Diagnostics</h3>
+        <button class="modal-close" id="modal-close-btn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="color: var(--text-muted); font-size: 14px;">Runtime configuration active on this instance:</p>
+        <pre id="env-json-dump">Loading...</pre>
+        <button id="copy-curl-btn" style="background: var(--accent-amber); color: #000; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600;">
+          Copy Health Check cURL
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function() {
+      "use strict";
+      let elapsedSeconds = parseInt("__INITIAL_UPTIME__", 10) || 0;
+      const uptimeTicker = document.getElementById("uptime-ticker");
+      const statusIndicator = document.getElementById("status-indicator");
+      const statusText = document.getElementById("status-text");
+      const latencyText = document.getElementById("latency-text");
+      const waveform = document.getElementById("waveform");
+      const envModal = document.getElementById("env-modal");
+      const modalCloseBtn = document.getElementById("modal-close-btn");
+      const envBadge = document.getElementById("env-badge");
+      const envJsonDump = document.getElementById("env-json-dump");
+      const copyCurlBtn = document.getElementById("copy-curl-btn");
+
+      function formatUptime(s) {
+        const d = Math.floor(s / 86400);
+        const h = Math.floor((s % 86400) / 3600);
+        const m = Math.floor((s % 3600) / 60);
+        const sec = s % 60;
+        if (d > 0) return d + "d " + h + "h " + m + "m " + sec + "s";
+        return h + "h " + m + "m " + sec + "s";
+      }
+
+      uptimeTicker.textContent = formatUptime(elapsedSeconds);
+      setInterval(function() {
+        elapsedSeconds += 1;
+        uptimeTicker.textContent = formatUptime(elapsedSeconds);
+      }, 1000);
+
+      async function pingHealth() {
+        const start = performance.now();
+        try {
+          waveform.classList.add("activity-boost");
+          setTimeout(() => waveform.classList.remove("activity-boost"), 700);
+
+          const res = await fetch("/api/health", { cache: "no-store", headers: { "Accept": "application/json" } });
+          const ms = Math.round(performance.now() - start);
+          latencyText.textContent = ms + "ms";
+
+          if (res.ok) {
+            statusIndicator.className = "status-indicator status-operational";
+            statusText.textContent = "Operational";
+            const data = await res.json().catch(() => null);
+            if (data && data.data && typeof data.data.uptime_seconds === "number") {
+              elapsedSeconds = data.data.uptime_seconds;
+            }
+          } else {
+            statusIndicator.className = "status-indicator status-degraded";
+            statusText.textContent = "Degraded";
+          }
+        } catch (e) {
+          latencyText.textContent = "--";
+          statusIndicator.className = "status-indicator status-offline";
+          statusText.textContent = "Unreachable";
+        }
+      }
+
+      pingHealth();
+      setInterval(pingHealth, 8000);
+
+      envBadge.addEventListener("click", function() {
+        envJsonDump.textContent = JSON.stringify({
+          service: "SimpleBash Document Engine",
+          version: "__VERSION__",
+          environment: "__ENVIRONMENT__",
+          uptimeSeconds: elapsedSeconds,
+          host: window.location.host,
+          timestamp: new Date().toISOString()
+        }, null, 2);
+        envModal.classList.add("active");
+      });
+
+      modalCloseBtn.addEventListener("click", () => envModal.classList.remove("active"));
+      envModal.addEventListener("click", (e) => { if (e.target === envModal) envModal.classList.remove("active"); });
+
+      copyCurlBtn.addEventListener("click", function() {
+        const cmd = "curl -i -X GET " + window.location.origin + "/api/health";
+        navigator.clipboard.writeText(cmd).then(() => {
+          copyCurlBtn.textContent = "Copied to clipboard!";
+          setTimeout(() => { copyCurlBtn.textContent = "Copy Health Check cURL"; }, 2000);
+        });
+      });
+    })();
+  </script>
+</body>
+</html>
