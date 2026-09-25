@@ -34,6 +34,8 @@ pub struct Config {
     /// `logoUrl` is ignored and the template renders with its built-in
     /// fallback. Default `true`.
     pub remote_image_fetch_enabled: bool,
+    /// Environment (e.g. "development" or "production").
+    pub app_env: String,
 }
 
 /// Why startup configuration failed to load. `main.rs` logs this and exits
@@ -95,6 +97,12 @@ impl Config {
             .parse::<bool>()
             .map_err(|_| ConfigError::Invalid("REMOTE_IMAGE_FETCH_ENABLED"))?;
 
+        let app_env = env::var("APP_ENV")
+            .or_else(|_| env::var("ENVIRONMENT"))
+            .unwrap_or_else(|_| "development".to_string())
+            .trim()
+            .to_lowercase();
+
         Ok(Self {
             database_url,
             port,
@@ -106,6 +114,7 @@ impl Config {
             remote_image_max_bytes,
             remote_image_timeout_secs,
             remote_image_fetch_enabled,
+            app_env,
         })
     }
 }
