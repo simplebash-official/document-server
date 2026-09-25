@@ -62,9 +62,9 @@ async fn portal_renders_at_root_and_api() {
         .unwrap();
     let body_str = String::from_utf8(body_bytes.to_vec()).unwrap();
     assert!(body_str.contains("SimpleBash Document Engine"));
-    assert!(body_str.contains("waveform-visualizer"));
+    assert!(body_str.contains("telemetry-signal"));
     assert!(body_str.contains("uptime-ticker"));
-    assert!(body_str.contains("development"));
+    assert!(body_str.contains("Development"));
 
     // 2. Test GET /api
     let res_api = app
