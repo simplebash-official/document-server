@@ -105,3 +105,35 @@ async fn generate_barcode_empty_content_returns_400() {
     .unwrap();
     assert_eq!(json["code"], "VALIDATION_ERROR");
 }
+
+#[tokio::test]
+async fn generate_barcode_rejects_oversized_content_and_height() {
+    for payload in [
+        json!({ "content": "A".repeat(257), "symbology": "code128" }),
+        json!({ "content": "SKU-1", "symbology": "code128", "height": 100_000 }),
+        json!({ "content": "SKU-1", "symbology": "code128", "height": 0 }),
+    ] {
+        let app = common::spawn_app().await;
+        let response = app
+            .router
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/barcodes/generate")
+                    .header("content-type", "application/json")
+                    .body(Body::from(payload.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST, "{payload}");
+        let json: serde_json::Value = serde_json::from_slice(
+            &axum::body::to_bytes(response.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(json["code"], "VALIDATION_ERROR");
+    }
+}

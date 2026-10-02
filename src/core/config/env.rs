@@ -34,6 +34,12 @@ pub struct Config {
     /// `logoUrl` is ignored and the template renders with its built-in
     /// fallback. Default `true`.
     pub remote_image_fetch_enabled: bool,
+    /// When `false` (the default), outbound image requests are forbidden from
+    /// connecting to loopback, link-local (cloud metadata 169.254.169.254),
+    /// private RFC 1918 and other reserved ranges, and redirects are refused.
+    /// Set `ALLOW_PRIVATE_IP_IMAGES=true` only for local development against a
+    /// logo server on your own machine/network.
+    pub allow_private_ip_images: bool,
     /// Environment (e.g. "development" or "production").
     pub app_env: String,
 }
@@ -49,6 +55,29 @@ pub enum ConfigError {
     Missing(&'static str),
     #[error("invalid value for env var {0}")]
     Invalid(&'static str),
+    #[error(
+        "INTERNAL_API_KEY is too weak: use a random secret of at least {MIN_INTERNAL_API_KEY_LEN} characters (e.g. `openssl rand -hex 32`), not a placeholder"
+    )]
+    WeakInternalApiKey,
+}
+
+/// Shortest `INTERNAL_API_KEY` accepted at startup. The key is the only
+/// access control on the render/documents/template-data routes.
+pub const MIN_INTERNAL_API_KEY_LEN: usize = 16;
+
+/// Rejects an empty, short, or copied-from-the-docs `INTERNAL_API_KEY` so a
+/// deployment can't boot with a secret anyone reading this repo knows.
+fn validate_internal_api_key(key: &str) -> Result<(), ConfigError> {
+    let trimmed = key.trim();
+    let lowered = trimmed.to_ascii_lowercase();
+    let is_placeholder = lowered.starts_with("replace_with")
+        || lowered.starts_with("change-me")
+        || lowered.starts_with("changeme")
+        || lowered == "secret";
+    if trimmed.len() < MIN_INTERNAL_API_KEY_LEN || is_placeholder {
+        return Err(ConfigError::WeakInternalApiKey);
+    }
+    Ok(())
 }
 
 impl Config {
@@ -81,6 +110,7 @@ impl Config {
 
         let internal_api_key =
             env::var("INTERNAL_API_KEY").map_err(|_| ConfigError::Missing("INTERNAL_API_KEY"))?;
+        validate_internal_api_key(&internal_api_key)?;
 
         let remote_image_max_bytes = env::var("REMOTE_IMAGE_MAX_BYTES")
             .unwrap_or_else(|_| "5242880".to_string())
@@ -103,6 +133,13 @@ impl Config {
             .trim()
             .to_lowercase();
 
+        // Deny by default regardless of APP_ENV: a deployment that forgets to
+        // set APP_ENV must not silently allow requests into its own network.
+        let allow_private_ip_images = env::var("ALLOW_PRIVATE_IP_IMAGES")
+            .unwrap_or_else(|_| "false".to_string())
+            .parse::<bool>()
+            .map_err(|_| ConfigError::Invalid("ALLOW_PRIVATE_IP_IMAGES"))?;
+
         Ok(Self {
             database_url,
             port,
@@ -114,7 +151,35 @@ impl Config {
             remote_image_max_bytes,
             remote_image_timeout_secs,
             remote_image_fetch_enabled,
+            allow_private_ip_images,
             app_env,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rejects_empty_short_and_placeholder_keys() {
+        for key in [
+            "",
+            "   ",
+            "short",
+            "replace_with_a_secure_random_64_character_hex_string",
+            "change-me-in-production",
+        ] {
+            assert!(
+                validate_internal_api_key(key).is_err(),
+                "{key:?} should be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn accepts_a_random_key() {
+        assert!(validate_internal_api_key("3f9a1c0d7be24e55a1c9e0b4d2f86a71").is_ok());
+        assert!(validate_internal_api_key("test-internal-api-key").is_ok());
     }
 }

@@ -12,6 +12,8 @@ services:
       - PORT=8090
       - INTERNAL_API_KEY=${INTERNAL_API_KEY:?Set INTERNAL_API_KEY (e.g. export INTERNAL_API_KEY=$(openssl rand -hex 32))}
       - DATABASE_URL=sqlite:///app/data/document_server.db
+      - APP_ENV=production
+      - ALLOW_PRIVATE_IP_IMAGES=false
       - RUST_LOG=document_server=info,tower_http=info,info
     volumes:
       - document_data:/app/data

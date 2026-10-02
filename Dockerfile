@@ -70,6 +70,8 @@ ENV PORT=8090 \
     TEMPLATES_DIR=/app/templates \
     FONTS_DIR=/app/fonts \
     MAX_RENDER_BODY_BYTES=5242880 \
+    APP_ENV=production \
+    ALLOW_PRIVATE_IP_IMAGES=false \
     RUST_LOG=document_server=info,tower_http=info,info
 
 USER appuser

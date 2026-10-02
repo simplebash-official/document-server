@@ -81,6 +81,9 @@ pub async fn spawn_app_with_templates_dir(templates_dir: &str) -> TestApp {
     let db_file = tempfile::NamedTempFile::new().expect("create temp sqlite file");
     config.database_url = format!("sqlite://{}", db_file.path().display());
     config.templates_dir = templates_dir.to_string();
+    // The `logoUrl` tests download from a throwaway server on 127.0.0.1,
+    // which the production default (deny private IPs) would refuse.
+    config.allow_private_ip_images = true;
 
     let db = clients::sqlite::connect(&config.database_url)
         .await

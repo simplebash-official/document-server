@@ -191,7 +191,18 @@ fn read_font_files(dir: &Path) -> Result<Vec<Vec<u8>>, RenderEngineError> {
             source,
         })?;
         let path = entry.path();
-        if path.is_file() {
+        // Only font files: the directory also carries the fonts' licence
+        // texts (e.g. `OFL.txt`), which must ship alongside them.
+        let is_font = path
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .is_some_and(|ext| {
+                matches!(
+                    ext.to_ascii_lowercase().as_str(),
+                    "ttf" | "otf" | "ttc" | "otc"
+                )
+            });
+        if path.is_file() && is_font {
             let bytes =
                 std::fs::read(&path).map_err(|source| RenderEngineError::FontsDirUnreadable {
                     path: dir.to_path_buf(),
