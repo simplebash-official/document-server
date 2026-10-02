@@ -120,7 +120,10 @@ async fn upgrading_a_pre_tenant_database_lets_a_second_tenant_reuse_the_same_tem
         .fetch_one(&pool)
         .await
         .unwrap();
-    assert_eq!(count, 2, "no rows lost or duplicated across a second connect");
+    assert_eq!(
+        count, 2,
+        "no rows lost or duplicated across a second connect"
+    );
 }
 
 /// `documents` never had a unique constraint to begin with (its only key is

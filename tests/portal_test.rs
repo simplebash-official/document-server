@@ -29,6 +29,7 @@ async fn portal_renders_at_root_and_api() {
         remote_image_max_bytes: 5242880,
         remote_image_timeout_secs: 10,
         remote_image_fetch_enabled: true,
+        allow_private_ip_images: true,
         app_env: "development".to_string(),
     };
 

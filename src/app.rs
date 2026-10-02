@@ -136,11 +136,12 @@ async fn portal(
     let uptime = server_uptime_seconds();
     let version = env!("CARGO_PKG_VERSION");
     let env_name = &state.config.app_env;
-    let env_class = if env_name.eq_ignore_ascii_case("production") || env_name.eq_ignore_ascii_case("prod") {
-        "env-prod"
-    } else {
-        "env-dev"
-    };
+    let env_class =
+        if env_name.eq_ignore_ascii_case("production") || env_name.eq_ignore_ascii_case("prod") {
+            "env-prod"
+        } else {
+            "env-dev"
+        };
 
     let display_env = match env_name.to_lowercase().as_str() {
         "production" | "prod" => "Production".to_string(),

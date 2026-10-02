@@ -3,3 +3,13 @@
 *.db
 *.db-shm
 *.db-wal
+
+# Local AI-tooling / knowledge-graph output (kept on disk, never committed)
+graphify-out/
+.claude/
+.agents/
+.obsidian/
+skills-lock.json
+
+# OS files
+.DS_Store

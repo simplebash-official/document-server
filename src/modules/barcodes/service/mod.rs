@@ -14,6 +14,13 @@ use crate::{
     domain::barcodes::{BarcodeResponse, BarcodeSymbology, GenerateBarcodeRequest},
 };
 
+/// Longest barcode content accepted. Real 1D barcodes are a few dozen
+/// characters; the cap stops the public generate route from being used to
+/// build arbitrarily large SVGs.
+pub const MAX_BARCODE_CONTENT_CHARS: usize = 256;
+/// Largest barcode height (SVG units) accepted, for the same reason.
+pub const MAX_BARCODE_HEIGHT: u32 = 1000;
+
 /// Generates an SVG barcode for the given request payload.
 pub fn generate_barcode(req: &GenerateBarcodeRequest) -> AppResult<BarcodeResponse> {
     if req.content.trim().is_empty() {
@@ -23,7 +30,20 @@ pub fn generate_barcode(req: &GenerateBarcodeRequest) -> AppResult<BarcodeRespon
         ));
     }
 
+    if req.content.chars().count() > MAX_BARCODE_CONTENT_CHARS {
+        return Err(AppError::validation_with_code(
+            format!("barcode content cannot exceed {MAX_BARCODE_CONTENT_CHARS} characters"),
+            codes::VALIDATION_ERROR,
+        ));
+    }
+
     let height = req.height.unwrap_or(80);
+    if height == 0 || height > MAX_BARCODE_HEIGHT {
+        return Err(AppError::validation_with_code(
+            format!("barcode height must be between 1 and {MAX_BARCODE_HEIGHT}"),
+            codes::VALIDATION_ERROR,
+        ));
+    }
     let svg_generator = SVG::new(height);
 
     let encoded_data: Vec<u8> = match req.symbology {

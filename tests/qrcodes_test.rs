@@ -36,7 +36,10 @@ async fn generate_qr_code_post_success() {
     .unwrap();
 
     assert_eq!(json["success"], true);
-    assert_eq!(json["data"]["content"], "https://simplebash.com/pay/inv_9988");
+    assert_eq!(
+        json["data"]["content"],
+        "https://simplebash.com/pay/inv_9988"
+    );
     assert_eq!(json["data"]["ecc"], "M");
     assert!(json["data"]["svg"].as_str().unwrap().contains("<svg"));
 }

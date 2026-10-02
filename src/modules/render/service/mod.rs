@@ -153,8 +153,14 @@ async fn render_template_inner(
     )
     .await?;
 
-    documents::service::record_document(db, tenant_key, &template.key, data, pdf_bytes.len() as i64)
-        .await?;
+    documents::service::record_document(
+        db,
+        tenant_key,
+        &template.key,
+        data,
+        pdf_bytes.len() as i64,
+    )
+    .await?;
 
     Ok((pdf_bytes, template.key))
 }
@@ -193,6 +199,13 @@ pub(crate) async fn compile_pdf(
         })?;
     }
 
+    // `logo` is a local filename the server injects below after resolving
+    // `logoUrl`; a caller-supplied value would let a payload point the
+    // template at any other file under the templates directory.
+    if let Some(fields) = data.as_object_mut() {
+        fields.remove("logo");
+    }
+
     let logo_url = data
         .get("logoUrl")
         .and_then(|value| value.as_str())
@@ -212,6 +225,7 @@ pub(crate) async fn compile_pdf(
                 url,
                 cfg.remote_image_max_bytes,
                 Duration::from_secs(cfg.remote_image_timeout_secs),
+                cfg.allow_private_ip_images,
             )
             .await
             .map_err(|err| {
