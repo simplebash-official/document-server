@@ -12,7 +12,25 @@ A standalone Rust/Axum service that renders PDFs from Typst templates (embedded 
 
 **Env vars** (all default except `INTERNAL_API_KEY`): see `.env.example`. `BIND_ADDR` (default `0.0.0.0`) restricts the listener to loopback (`127.0.0.1`) for the Tauri desktop bundle. Beyond the core set, `REMOTE_IMAGE_FETCH_ENABLED` / `REMOTE_IMAGE_MAX_BYTES` / `REMOTE_IMAGE_TIMEOUT_SECS` bound the render-time `logoUrl` download (see the `render` module below).
 
-## Commands
+### Keep the two checkouts in sync (check before doing anything)
+
+Every app repo exists **twice** on this machine: the working copy at `pos/<name>` (edit and commit here) and the pinned submodule at `pos/desktop/<name>` (what the desktop app and its installers build from). They drift apart, and when they do, features silently disappear from whichever one you run (the desktop's browser sign-in step once lived only in the pinned frontend, so a run from the working copy showed the old form).
+
+**Before starting any task, compare them:**
+
+```bash
+git -C pos/<name> fetch ../desktop/<name>
+git -C pos/<name> log --oneline HEAD..FETCH_HEAD     # in the pinned copy, missing here -> merge these in first
+git -C pos/<name> log --oneline FETCH_HEAD..HEAD     # in the working copy, missing from the pin
+git -C pos/desktop submodule status
+```
+
+- Pinned copy has commits the working copy lacks: `git merge <sha>` them into the working copy first (resolve conflicts, rerun the tests).
+- Working copy is ahead: commit there, then move the pin: `git -C pos/desktop/<name> fetch ../../<name> && git -C pos/desktop/<name> checkout --detach <sha>`. Never edit files inside `pos/desktop/<name>` directly. Pushing (and the bump PR) is a separate, deliberate step.
+- Never run `tauri dev` or build an installer while the working copy is behind the pin.
+- Dev run of the desktop app against the local Docker stack: build with `CLOUD_API_URL=http://localhost:8082 CLOUD_SYNC_API_URL=http://localhost:8081` (read at compile time with `option_env!`; `touch pos/desktop/src-tauri/src/cloud/mod.rs` to force a rebuild). Use `:8081` for the Docker POS API: the Docker backend on `:8080` shares its port with the desktop's own sidecar, which answers first on loopback.
+
+# Commands
 
 - `cargo build` / `cargo run` (equivalent to `cargo run --bin document_server`)
 - `cargo test` — every test needs no external service: `tests/*_test.rs` open their own throwaway SQLite file per test (see `tests/common::spawn_app()`), and the `#[cfg(test)]` unit tests in `src/clients/render.rs` exercise the real Typst compiler against the real `templates/`/`fonts/` directories.
