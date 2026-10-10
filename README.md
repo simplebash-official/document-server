@@ -39,6 +39,11 @@ They live in [`templates/documents/`](templates/documents) and
 [`templates/labels/`](templates/labels): each is a `.typ` file, a
 `.schema.json` contract and a `.json` sample.
 
+The `.typ` files here are **plain examples**. SimpleBash's own designs are
+kept in a private repo and laid over these at build time (same filenames):
+`scripts/assemble-templates.sh <your-templates-dir> <out-dir>`, then point
+`TEMPLATES_DIR` at `<out-dir>`. Use the same mechanism for your own designs.
+
 ## Getting started
 
 ### Prerequisites

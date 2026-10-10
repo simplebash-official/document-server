@@ -17,7 +17,8 @@ services:
       - RUST_LOG=document_server=info,tower_http=info,info
     volumes:
       - document_data:/app/data
-      # Uncomment to mount templates/fonts for live editing without image rebuild:
+      # Uncomment to mount templates/fonts for live editing without image rebuild
+      # (or mount an assemble-templates.sh output dir to use your own designs):
       # - ./templates:/app/templates:ro
       # - ./fonts:/app/fonts:ro
 

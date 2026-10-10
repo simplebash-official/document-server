@@ -5,6 +5,17 @@
 - `templates/documents/*.typ` — standard printable documents; `templates/labels/*.typ` — thermal stickers. A bare `.typ` at the top level would also be discovered as a `document`. Only these two subdirectory names carry meaning to the scanner (`clients::render::scan_templates`): anything else becomes a `document` too.
 - `templates/lib/` is skipped by the scan — vendored Typst packages, never renderable templates.
 
+## Public examples vs private designs
+
+The `documents/*.typ` and `labels/*.typ` files in this repo are **plain public
+examples**. The real SimpleBash designs live in the private
+`simplebash-official/document-templates` repo (`../document-templates` locally)
+with the **same filenames**, and `scripts/assemble-templates.sh` overlays them at
+build time (prod `deploy.yml`, desktop `build-sidecars.sh`). Schemas, samples and
+`lib/` are public and shared by both. Never copy a private `.typ` into this repo:
+assemble into a directory outside it and set `TEMPLATES_DIR`. A schema change
+must keep both the example and the private `.typ` compiling.
+
 ## Naming
 
 A template's filename stem **is** its identity (`templates.name`, and the scope key for
