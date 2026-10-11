@@ -1,7 +1,7 @@
-use std::fs;
-use std::path::PathBuf;
 use document_server::domain::qrcodes::{GenerateQrCodeRequest, QrEccLevel};
 use document_server::modules::qrcodes::service::generate_qr_code;
+use std::fs;
+use std::path::PathBuf;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let content = std::env::args()
@@ -26,6 +26,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         fs::create_dir_all(parent)?;
     }
     fs::write(&output_path, res.svg)?;
-    println!("Successfully generated QR code for '{}' at {:?}", content, output_path);
+    println!(
+        "Successfully generated QR code for '{}' at {:?}",
+        content, output_path
+    );
     Ok(())
 }

@@ -1,7 +1,7 @@
 // Full-stack: real SQLite (a throwaway per-test file via
 // `common::spawn_app`), real render engine. Exercises the whole render
-// pipeline end to end against the seed templates (A4 Invoice, Thermal
-// Receipt, Credit Note, Product Sticker Label), resolved by their schema
+// pipeline end to end against the seed templates (A4 Invoice, A4 Invoice
+// Modern, Thermal Receipt, Credit Note, Product Sticker Label), resolved by their schema
 // `title` since on-disk names are opaque ids now.
 
 mod common;
@@ -193,14 +193,24 @@ async fn render_without_internal_api_key_header_returns_401() {
 
 #[tokio::test]
 async fn render_a4_invoice_returns_pdf_and_records_document() {
+    render_a4_contract_returns_pdf_and_records_document("A4 Invoice").await;
+}
+
+// Same input contract as the classic A4 Invoice, different design.
+#[tokio::test]
+async fn render_a4_invoice_modern_returns_pdf_and_records_document() {
+    render_a4_contract_returns_pdf_and_records_document("A4 Invoice Modern").await;
+}
+
+async fn render_a4_contract_returns_pdf_and_records_document(description: &str) {
     let app = common::spawn_app().await;
 
     let template_key: String =
         sqlx::query_scalar("SELECT key FROM templates WHERE description = ?")
-            .bind("A4 Invoice")
+            .bind(description)
             .fetch_one(&app.db)
             .await
-            .expect("a4-invoice template should be synced from disk by spawn_app");
+            .expect("A4 template should be synced from disk by spawn_app");
 
     // Field-for-field what SimpleBash POS's `billing::service::print_payload::
     // build_a4_invoice_data` sends — kept in step with

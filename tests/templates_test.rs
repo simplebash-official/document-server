@@ -44,6 +44,7 @@ async fn list_templates_returns_every_seeded_template_with_type_and_expected_dat
         descriptions,
         vec![
             "A4 Invoice",
+            "A4 Invoice Modern",
             "Analytics Report",
             "Credit Note",
             "Product Sticker Label",
@@ -123,7 +124,7 @@ async fn list_templates_filters_by_type() {
     .unwrap();
 
     let templates = json["data"]["templates"].as_array().unwrap();
-    assert_eq!(templates.len(), 4);
+    assert_eq!(templates.len(), 5);
     assert!(templates.iter().all(|t| t["type"] == "document"));
     let mut descriptions: Vec<&str> = templates
         .iter()
@@ -134,6 +135,7 @@ async fn list_templates_filters_by_type() {
         descriptions,
         vec![
             "A4 Invoice",
+            "A4 Invoice Modern",
             "Analytics Report",
             "Credit Note",
             "Thermal Receipt"
@@ -299,7 +301,7 @@ async fn sync_deactivates_templates_removed_from_disk() {
             .unwrap(),
     )
     .unwrap();
-    assert_eq!(json["data"]["syncedCount"], 5);
+    assert_eq!(json["data"]["syncedCount"], 6);
     assert_eq!(json["data"]["deactivatedCount"], 1);
     let names: Vec<&str> = json["data"]["templates"]
         .as_array()
@@ -307,7 +309,7 @@ async fn sync_deactivates_templates_removed_from_disk() {
         .iter()
         .map(|v| v.as_str().unwrap())
         .collect();
-    assert_eq!(names.len(), 5);
+    assert_eq!(names.len(), 6);
     assert!(
         names
             .iter()
@@ -326,7 +328,7 @@ async fn sync_deactivates_templates_removed_from_disk() {
             .fetch_one(&app.db)
             .await
             .unwrap();
-    assert_eq!(active_count, 5);
+    assert_eq!(active_count, 6);
 }
 
 // The point of the sync endpoint: a `.typ` dropped into the templates dir
@@ -370,7 +372,7 @@ async fn sync_picks_up_new_template_and_renders_it_without_restart() {
             .unwrap(),
     )
     .unwrap();
-    assert_eq!(json["data"]["syncedCount"], 6);
+    assert_eq!(json["data"]["syncedCount"], 7);
 
     let hot_key: String = sqlx::query_scalar("SELECT key FROM templates WHERE name = 'hot-add'")
         .fetch_one(&app.db)
@@ -628,4 +630,98 @@ async fn create_template_that_fails_to_compile_is_rejected_and_rolled_back() {
         after.len(),
         "rolled-back files should be gone"
     );
+}
+
+// The backend feeds both A4 designs from one payload builder, so their input
+// contracts must stay identical — only the human `title`/`description` differ.
+#[test]
+fn a4_invoice_modern_schema_matches_a4_invoice_schema() {
+    let load = |name: &str| -> serde_json::Value {
+        let path = format!("templates/documents/{name}.schema.json");
+        let mut schema: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).expect(&path)).unwrap();
+        let obj = schema.as_object_mut().unwrap();
+        obj.remove("title");
+        obj.remove("description");
+        schema
+    };
+    assert_eq!(
+        load("doc_temp_ZahcoYg8xCQjuc8c"),
+        load("doc_temp_vEf0Y7jQHQj2rIuO")
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Template contract guards. The POS backend builds its document dropdowns from
+// each schema's `x-document-kind`, finds templates by title and renders their
+// samples as previews, so these three facts must hold for every template.
+// ---------------------------------------------------------------------------
+
+/// `(subdir, file stem, parsed schema, parsed sample)` for every template that
+/// ships a `.schema.json`.
+fn schema_sidecars() -> Vec<(
+    &'static str,
+    String,
+    serde_json::Value,
+    Option<serde_json::Value>,
+)> {
+    let mut found = Vec::new();
+    for subdir in ["documents", "labels"] {
+        let dir = format!("templates/{subdir}");
+        for entry in std::fs::read_dir(&dir).expect("templates dir") {
+            let path = entry.unwrap().path();
+            let file = path.file_name().unwrap().to_string_lossy().to_string();
+            let Some(stem) = file.strip_suffix(".schema.json") else {
+                continue;
+            };
+            let schema = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+            let sample = std::fs::read_to_string(format!("{dir}/{stem}.json"))
+                .ok()
+                .map(|s| serde_json::from_str(&s).unwrap());
+            found.push((subdir, stem.to_string(), schema, sample));
+        }
+    }
+    found
+}
+
+#[test]
+fn every_document_schema_declares_its_document_kind() {
+    for (subdir, stem, schema, _) in schema_sidecars() {
+        if subdir != "documents" {
+            continue;
+        }
+        let kind = schema["x-document-kind"].as_str().unwrap_or_default();
+        assert!(
+            !kind.is_empty(),
+            "{stem}.schema.json needs a non-empty \"x-document-kind\" (e.g. \"a4-invoice\"); \
+             the POS dropdowns list templates by it"
+        );
+    }
+}
+
+#[test]
+fn template_titles_are_unique() {
+    let mut seen = std::collections::HashMap::new();
+    for (_, stem, schema, _) in schema_sidecars() {
+        let title = schema["title"].as_str().expect("schema title").to_string();
+        if let Some(other) = seen.insert(title.clone(), stem.clone()) {
+            panic!("title {title:?} is used by both {other} and {stem}; titles identify templates");
+        }
+    }
+}
+
+#[test]
+fn every_sample_validates_against_its_own_schema() {
+    for (_, stem, schema, sample) in schema_sidecars() {
+        let Some(sample) = sample else { continue };
+        let validator = jsonschema::validator_for(&schema).expect("schema compiles");
+        let errors: Vec<String> = validator
+            .iter_errors(&sample)
+            .map(|e| format!("{} at {}", e, e.instance_path()))
+            .collect();
+        assert!(
+            errors.is_empty(),
+            "{stem}.json does not satisfy {stem}.schema.json: {errors:?}"
+        );
+    }
 }

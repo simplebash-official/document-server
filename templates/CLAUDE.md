@@ -28,11 +28,13 @@ The **human name** of a template lives in its `<name>.schema.json` `title` field
 sync pass copies that `title` into the `templates.description` column, which is what
 `GET /api/templates` and integration clients read to tell templates apart. Seed
 templates today: `doc_temp_vEf0Y7jQHQj2rIuO` = "A4 Invoice" (a branded/modern layout
-with an optional `logoUrl` — see below), `doc_temp_4pz79z5iba7TcEIp` = "Thermal
+with an optional `logoUrl` — see below), `doc_temp_ZahcoYg8xCQjuc8c` = "A4 Invoice Modern"
+(the same input contract as A4 Invoice, a different design; its schema/sample are copies
+with only the `title` changed — keep the two contracts identical), `doc_temp_4pz79z5iba7TcEIp` = "Thermal
 Receipt", `doc_temp_5DHl8hUQTX3oLBSR` = "Credit Note", `lbl_temp_qklcWIolwoFFN3xk` =
 "Product Sticker Label".
 
-The A4 Invoice's `logoUrl` field accepts an **http(s) URL** (downloaded at render
+Both A4 invoices' `logoUrl` field accepts an **http(s) URL** (downloaded at render
 time) **or** a `data:image/…;base64,…` URI (decoded inline, no network) — SimpleBash POS
 sends its shop logo the second way. The server turns either into a local file for
 that one compile and discards it; a `data:` `logoUrl` is also blanked from the
@@ -46,6 +48,41 @@ Every `<name>.typ` may have two sidecars, both optional and both read by `scan_t
 2. **`<name>.json`** — worked sample data, exposed as `Template.data`. Documentation only, never enforced.
 
 Historical note: samples once lived in the `data_schema` DB column under a misleading name; the sync pass now writes the real schema there and keeps samples in `sample_data`.
+
+## Document kinds & the POS template dropdowns
+
+Every `documents/*.schema.json` declares what the template is *for* with a top-level
+`"x-document-kind"` (unknown keywords are harmless annotations to the `jsonschema` validator;
+the marker rides along in `dataSchema` on `GET /api/templates`). Kinds in use: `a4-invoice`,
+`thermal-receipt`, `credit-note`, `analytics-report`. SimpleBash POS's backend lists the
+**active** templates of a kind in its "Document Designs" dropdowns (Settings and the print
+preview), shows each schema `title` as the label, and renders the template's `.json` sample
+as the preview — so a new template needs no backend or frontend change.
+
+Rules that keep that safe (guarded by `tests/templates_test.rs` and, in the backend,
+`print_payload::schema_drift_tests`):
+
+- **All templates of one kind accept the kind's standard payload** (the one the backend's
+  builder sends). Extra optional fields are fine (`additionalProperties: true`); extra
+  *required* fields are not. A `thermal-receipt` must support both `paperWidthMm` 58 and 80.
+- **Titles are unique** across documents and labels: the title is the dropdown label and the
+  backend's lookup key for the built-in default of each kind.
+- **The sample validates against its own schema** and compiles; keep `logoUrl` out of it or
+  expect the backend to drop it for previews.
+- The list endpoint returns inactive rows too and sorts by id — consumers must filter on
+  `isActive` and sort by title themselves.
+
+**A4 invoice payment fields** (both A4 designs follow the same reading): `tenderedAmountCents` is the money the customer handed over (the total when nothing was recorded), `changeDueCents` the change given back, `amountPaidCents` what has been paid so far, `balanceDueCents` what is still owed. A design's **Total Due is `balanceDueCents`** — 0.00 on a paid invoice, never the invoice total (that is the Grand Total); a voided invoice shows 0.00.
+
+### How to add a template (the whole checklist)
+
+1. Draft it in `document-templates/lab/…` and compile it with `typst`.
+2. Promote it: private `document-templates/documents/doc_temp_<16 alnum>.typ` (self-contained,
+   fonts from `fonts/`, imports only from `../lib/`).
+3. Here: `documents/doc_temp_<same id>.schema.json` (unique `title`, `x-document-kind`, the
+   kind's standard contract), `.json` sample, and a plain public example `.typ`.
+4. `cargo test` here and in `pos/backend` (schema drift), then deploy / build the desktop
+   (`assemble-templates.sh` overlays the private `.typ`). It appears in the dropdowns.
 
 ## Barcode/QR (`templates/lib/`)
 
