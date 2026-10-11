@@ -28,11 +28,13 @@ The **human name** of a template lives in its `<name>.schema.json` `title` field
 sync pass copies that `title` into the `templates.description` column, which is what
 `GET /api/templates` and integration clients read to tell templates apart. Seed
 templates today: `doc_temp_vEf0Y7jQHQj2rIuO` = "A4 Invoice" (a branded/modern layout
-with an optional `logoUrl` — see below), `doc_temp_4pz79z5iba7TcEIp` = "Thermal
+with an optional `logoUrl` — see below), `doc_temp_ZahcoYg8xCQjuc8c` = "A4 Invoice Modern"
+(the same input contract as A4 Invoice, a different design; its schema/sample are copies
+with only the `title` changed — keep the two contracts identical), `doc_temp_4pz79z5iba7TcEIp` = "Thermal
 Receipt", `doc_temp_5DHl8hUQTX3oLBSR` = "Credit Note", `lbl_temp_qklcWIolwoFFN3xk` =
 "Product Sticker Label".
 
-The A4 Invoice's `logoUrl` field accepts an **http(s) URL** (downloaded at render
+Both A4 invoices' `logoUrl` field accepts an **http(s) URL** (downloaded at render
 time) **or** a `data:image/…;base64,…` URI (decoded inline, no network) — SimpleBash POS
 sends its shop logo the second way. The server turns either into a local file for
 that one compile and discards it; a `data:` `logoUrl` is also blanked from the
