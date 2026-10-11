@@ -43,11 +43,14 @@
 
   if show-text or caption != none {
     let display-text = if caption != none { str(caption) } else { val }
-    align(center)[
-      #code-content
-      #v(1.5pt)
-      #text(size: text-size, font: font, weight: "medium")[#display-text]
-    ]
+    // A stack, not paragraphs: separate paragraphs would add the page's paragraph
+    // spacing (several points) between the bars and their caption.
+    stack(
+      dir: ttb,
+      spacing: 1.5pt,
+      code-content,
+      align(center, text(size: text-size, font: font, weight: "medium")[#display-text]),
+    )
   } else {
     code-content
   }
