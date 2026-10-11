@@ -52,6 +52,7 @@
     "tenderedAmountCents": { "type": "integer" },
     "amountPaidCents": { "type": "integer" },
     "balanceDueCents": { "type": "integer" },
+    "changeDueCents": { "type": "integer" },
     "items": {
       "type": "array",
       "items": {

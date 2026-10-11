@@ -72,6 +72,8 @@ Rules that keep that safe (guarded by `tests/templates_test.rs` and, in the back
 - The list endpoint returns inactive rows too and sorts by id — consumers must filter on
   `isActive` and sort by title themselves.
 
+**A4 invoice payment fields** (both A4 designs follow the same reading): `tenderedAmountCents` is the money the customer handed over (the total when nothing was recorded), `changeDueCents` the change given back, `amountPaidCents` what has been paid so far, `balanceDueCents` what is still owed. A design's **Total Due is `balanceDueCents`** — 0.00 on a paid invoice, never the invoice total (that is the Grand Total); a voided invoice shows 0.00.
+
 ### How to add a template (the whole checklist)
 
 1. Draft it in `document-templates/lab/…` and compile it with `typst`.

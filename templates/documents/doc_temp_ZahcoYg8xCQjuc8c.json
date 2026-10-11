@@ -17,6 +17,7 @@
   "tenderedAmountCents": 400000,
   "amountPaidCents": 400000,
   "balanceDueCents": 700000,
+  "changeDueCents": 0,
   "items": [
     {
       "name": "Screen Protector - iPhone 14",
