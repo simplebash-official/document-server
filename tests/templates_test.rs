@@ -650,3 +650,78 @@ fn a4_invoice_modern_schema_matches_a4_invoice_schema() {
         load("doc_temp_vEf0Y7jQHQj2rIuO")
     );
 }
+
+// ---------------------------------------------------------------------------
+// Template contract guards. The POS backend builds its document dropdowns from
+// each schema's `x-document-kind`, finds templates by title and renders their
+// samples as previews, so these three facts must hold for every template.
+// ---------------------------------------------------------------------------
+
+/// `(subdir, file stem, parsed schema, parsed sample)` for every template that
+/// ships a `.schema.json`.
+fn schema_sidecars() -> Vec<(
+    &'static str,
+    String,
+    serde_json::Value,
+    Option<serde_json::Value>,
+)> {
+    let mut found = Vec::new();
+    for subdir in ["documents", "labels"] {
+        let dir = format!("templates/{subdir}");
+        for entry in std::fs::read_dir(&dir).expect("templates dir") {
+            let path = entry.unwrap().path();
+            let file = path.file_name().unwrap().to_string_lossy().to_string();
+            let Some(stem) = file.strip_suffix(".schema.json") else {
+                continue;
+            };
+            let schema = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+            let sample = std::fs::read_to_string(format!("{dir}/{stem}.json"))
+                .ok()
+                .map(|s| serde_json::from_str(&s).unwrap());
+            found.push((subdir, stem.to_string(), schema, sample));
+        }
+    }
+    found
+}
+
+#[test]
+fn every_document_schema_declares_its_document_kind() {
+    for (subdir, stem, schema, _) in schema_sidecars() {
+        if subdir != "documents" {
+            continue;
+        }
+        let kind = schema["x-document-kind"].as_str().unwrap_or_default();
+        assert!(
+            !kind.is_empty(),
+            "{stem}.schema.json needs a non-empty \"x-document-kind\" (e.g. \"a4-invoice\"); \
+             the POS dropdowns list templates by it"
+        );
+    }
+}
+
+#[test]
+fn template_titles_are_unique() {
+    let mut seen = std::collections::HashMap::new();
+    for (_, stem, schema, _) in schema_sidecars() {
+        let title = schema["title"].as_str().expect("schema title").to_string();
+        if let Some(other) = seen.insert(title.clone(), stem.clone()) {
+            panic!("title {title:?} is used by both {other} and {stem}; titles identify templates");
+        }
+    }
+}
+
+#[test]
+fn every_sample_validates_against_its_own_schema() {
+    for (_, stem, schema, sample) in schema_sidecars() {
+        let Some(sample) = sample else { continue };
+        let validator = jsonschema::validator_for(&schema).expect("schema compiles");
+        let errors: Vec<String> = validator
+            .iter_errors(&sample)
+            .map(|e| format!("{} at {}", e, e.instance_path()))
+            .collect();
+        assert!(
+            errors.is_empty(),
+            "{stem}.json does not satisfy {stem}.schema.json: {errors:?}"
+        );
+    }
+}
