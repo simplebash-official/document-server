@@ -31,7 +31,7 @@
     #if data.shopIsVatRegistered and opt("shopVatNo") != none [ \ VAT No: #data.shopVatNo]
   ],
   align(right)[
-    #text(size: 16pt, strong(if data.shopIsVatRegistered [TAX INVOICE] else [INVOICE])) \
+    #text(size: 16pt, strong[INVOICE]) \
     #if data.isDuplicate [DUPLICATE \ ]
     No: #data.invoiceNumber \
     Date: #data.formattedDate #data.formattedTime \
@@ -64,9 +64,6 @@
 #align(right)[
   Subtotal: #format-money(data.subtotalCents) \
   #if data.discountCents > 0 [Discount: -#format-money(data.discountCents) \ ]
-  #if opt("taxCents") != none [
-    Tax#if opt("vatRatePercent") != none [ (#data.vatRatePercent%)]: #format-money(data.taxCents) \
-  ]
   *Total: #format-money(data.totalCents)* \
   #text(size: 8.5pt, data.amountInWords)
 ]

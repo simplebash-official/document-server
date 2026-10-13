@@ -35,7 +35,6 @@ Cashier: #data.cashierName
 #line(length: 100%)
 #row[Subtotal][#format-money(data.subtotalCents)]
 #if data.discountCents > 0 [#row[Discount][-#format-money(data.discountCents)]]
-#if opt("taxCents") != none and data.taxCents > 0 [#row[Tax][#format-money(data.taxCents)]]
 #row[*TOTAL*][*#format-money(data.totalCents)*]
 #line(length: 100%)
 
