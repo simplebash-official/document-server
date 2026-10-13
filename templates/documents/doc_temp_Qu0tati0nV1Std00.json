@@ -1,0 +1,48 @@
+{
+  "quotationNumber": "QUO-0001",
+  "formattedDate": "13 Oct 2026",
+  "validUntil": "27 Oct 2026",
+  "isCancelled": false,
+  "customerName": "Nimal Perera",
+  "customerPhone": "077 123 4567",
+  "customerAddress": "12 Temple Road, Kandy",
+  "items": [
+    {
+      "name": "Screen replacement - Galaxy A15",
+      "sku": "REP-SCR-0001",
+      "quantity": 2,
+      "unitPriceCents": 1000000,
+      "discountCents": 50000,
+      "totalCents": 1950000
+    },
+    {
+      "name": "Tempered glass",
+      "quantity": 1,
+      "unitPriceCents": 250000,
+      "discountCents": 0,
+      "totalCents": 250000
+    }
+  ],
+  "subtotalCents": 2200000,
+  "discountType": "percentage",
+  "discountValue": 10,
+  "discountCents": 220000,
+  "totalCents": 1980000,
+  "amountInWords": "Sri Lankan Rupees Nineteen Thousand Eight Hundred Only",
+  "notes": "Price excludes courier charges.",
+  "terms": "50% advance to start work. Prices are held until the valid-until date.",
+  "preparedBy": "Kamal",
+  "footerText": "Thank you for considering us.",
+  "bankName": "Commercial Bank",
+  "bankBranch": "Kandy",
+  "accountName": "TechFix Repairs (Pvt) Ltd",
+  "accountNumber": "1234567890",
+  "shopTradingName": "TechFix Repairs",
+  "shopLegalName": "TechFix Repairs (Pvt) Ltd",
+  "shopEmail": "hello@techfix.example",
+  "shopWebsite": "techfix.example",
+  "shopBusinessRegNo": "PV 00012345",
+  "shopAddressLines": ["123 Galle Road", "Colombo 04"],
+  "shopPrimaryPhone": "011 234 5678",
+  "shopSecondaryPhone": ""
+}

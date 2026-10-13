@@ -299,6 +299,109 @@ async fn render_a4_contract_returns_pdf_and_records_document(description: &str) 
     assert_eq!(file_size_bytes, pdf_bytes.len() as i64);
 }
 
+/// The shipped sample payload for the Quotation template, read from disk so
+/// the test cannot drift from the sidecar the backend's contract is built on.
+fn sample_quotation_data() -> serde_json::Value {
+    let path = std::path::Path::new("templates/documents/doc_temp_Qu0tati0nV1Std00.json");
+    serde_json::from_str(&std::fs::read_to_string(path).expect("quotation sample exists"))
+        .expect("quotation sample is JSON")
+}
+
+async fn render_quotation(app: &common::TestApp, data: serde_json::Value) -> (StatusCode, Vec<u8>) {
+    let template_key: String =
+        sqlx::query_scalar("SELECT key FROM templates WHERE description = 'Quotation'")
+            .fetch_one(&app.db)
+            .await
+            .expect("quotation template should be synced from disk by spawn_app");
+    let response = app
+        .router
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/render/{template_key}"))
+                .header("content-type", "application/json")
+                .header("X-Internal-Api-Key", &app.config.internal_api_key)
+                .body(Body::from(data.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let status = response.status();
+    let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    (status, bytes.to_vec())
+}
+
+#[tokio::test]
+async fn render_quotation_returns_pdf_and_records_document() {
+    let app = common::spawn_app().await;
+    let (status, pdf) = render_quotation(&app, sample_quotation_data()).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(pdf.starts_with(b"%PDF-"), "not a PDF");
+
+    let recorded: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM documents")
+        .fetch_one(&app.db)
+        .await
+        .unwrap();
+    assert_eq!(recorded, 1, "the render should be recorded");
+}
+
+#[tokio::test]
+async fn render_quotation_handles_cancelled_walk_in_and_empty_optionals() {
+    let app = common::spawn_app().await;
+
+    // Cancelled: prints (stamped) rather than failing.
+    let mut cancelled = sample_quotation_data();
+    cancelled["isCancelled"] = serde_json::json!(true);
+    let (status, pdf) = render_quotation(&app, cancelled).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(pdf.starts_with(b"%PDF-"));
+
+    // The shape the POS backend actually sends for a minimal quotation: every
+    // optional text field present but empty, no bank details, no discount.
+    let minimal = serde_json::json!({
+        "logoUrl": "",
+        "quotationNumber": "QUO-0002",
+        "formattedDate": "13 Oct 2026",
+        "validUntil": "27 Oct 2026",
+        "isCancelled": false,
+        "customerName": "Walk-in",
+        "customerPhone": "",
+        "customerAddress": "",
+        "items": [{"name": "Widget", "quantity": 1, "unitPriceCents": 5000,
+                   "discountCents": 0, "totalCents": 5000}],
+        "subtotalCents": 5000,
+        "discountType": "fixed",
+        "discountValue": 0.0,
+        "discountCents": 0,
+        "totalCents": 5000,
+        "amountInWords": "Sri Lankan Rupees Fifty Only",
+        "notes": "", "terms": "", "preparedBy": "", "footerText": "",
+        "bankName": "", "bankBranch": "", "accountName": "", "accountNumber": "",
+        "shopTradingName": "", "shopLegalName": "", "shopEmail": "", "shopWebsite": "",
+        "shopBusinessRegNo": "", "shopAddressLines": [],
+        "shopPrimaryPhone": "", "shopSecondaryPhone": ""
+    });
+    let (status, pdf) = render_quotation(&app, minimal).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(pdf.starts_with(b"%PDF-"));
+}
+
+#[tokio::test]
+async fn render_quotation_rejects_a_payload_missing_required_fields() {
+    let app = common::spawn_app().await;
+    let (status, _) = render_quotation(&app, serde_json::json!({"quotationNumber": "QUO-1"})).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+
+    // A line with quantity 0 violates the contract (minimum 1).
+    let mut bad = sample_quotation_data();
+    bad["items"][0]["quantity"] = serde_json::json!(0);
+    let (status, _) = render_quotation(&app, bad).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+}
+
 #[tokio::test]
 async fn render_credit_note_returns_pdf_and_records_document() {
     let app = common::spawn_app().await;

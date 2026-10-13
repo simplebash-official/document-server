@@ -1,0 +1,68 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Quotation",
+  "x-document-kind": "quotation",
+  "description": "Input contract for the Quotation template — see the .typ file's header comment for the authoritative field-by-field description and the sibling .json for a worked example.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "quotationNumber",
+    "formattedDate",
+    "validUntil",
+    "items",
+    "subtotalCents",
+    "discountCents",
+    "totalCents",
+    "amountInWords",
+    "shopAddressLines"
+  ],
+  "properties": {
+    "logoUrl": { "type": "string" },
+    "logoWidth": { "type": "number" },
+    "quotationNumber": { "type": "string" },
+    "formattedDate": { "type": "string" },
+    "validUntil": { "type": "string" },
+    "isCancelled": { "type": "boolean" },
+    "customerName": { "type": "string" },
+    "customerPhone": { "type": "string" },
+    "customerAddress": { "type": "string" },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["name", "quantity", "unitPriceCents", "discountCents", "totalCents"],
+        "properties": {
+          "name": { "type": "string" },
+          "sku": { "type": "string" },
+          "quantity": { "type": "integer", "minimum": 1 },
+          "unitPriceCents": { "type": "integer" },
+          "discountCents": { "type": "integer" },
+          "totalCents": { "type": "integer" }
+        }
+      }
+    },
+    "subtotalCents": { "type": "integer" },
+    "discountType": { "type": "string" },
+    "discountValue": { "type": "number" },
+    "discountCents": { "type": "integer" },
+    "totalCents": { "type": "integer" },
+    "amountInWords": { "type": "string" },
+    "notes": { "type": "string" },
+    "terms": { "type": "string" },
+    "preparedBy": { "type": "string" },
+    "footerText": { "type": "string" },
+    "bankName": { "type": "string" },
+    "bankBranch": { "type": "string" },
+    "accountName": { "type": "string" },
+    "accountNumber": { "type": "string" },
+    "shopTradingName": { "type": "string" },
+    "shopLegalName": { "type": "string" },
+    "shopEmail": { "type": "string" },
+    "shopWebsite": { "type": "string" },
+    "shopBusinessRegNo": { "type": "string" },
+    "shopAddressLines": { "type": "array", "items": { "type": "string" } },
+    "shopPrimaryPhone": { "type": "string" },
+    "shopSecondaryPhone": { "type": "string" }
+  }
+}

@@ -48,6 +48,7 @@ async fn list_templates_returns_every_seeded_template_with_type_and_expected_dat
             "Analytics Report",
             "Credit Note",
             "Product Sticker Label",
+            "Quotation",
             "Thermal Receipt",
         ]
     );
@@ -124,7 +125,7 @@ async fn list_templates_filters_by_type() {
     .unwrap();
 
     let templates = json["data"]["templates"].as_array().unwrap();
-    assert_eq!(templates.len(), 5);
+    assert_eq!(templates.len(), 6);
     assert!(templates.iter().all(|t| t["type"] == "document"));
     let mut descriptions: Vec<&str> = templates
         .iter()
@@ -138,6 +139,7 @@ async fn list_templates_filters_by_type() {
             "A4 Invoice Modern",
             "Analytics Report",
             "Credit Note",
+            "Quotation",
             "Thermal Receipt"
         ]
     );
@@ -301,7 +303,7 @@ async fn sync_deactivates_templates_removed_from_disk() {
             .unwrap(),
     )
     .unwrap();
-    assert_eq!(json["data"]["syncedCount"], 6);
+    assert_eq!(json["data"]["syncedCount"], 7);
     assert_eq!(json["data"]["deactivatedCount"], 1);
     let names: Vec<&str> = json["data"]["templates"]
         .as_array()
@@ -309,7 +311,7 @@ async fn sync_deactivates_templates_removed_from_disk() {
         .iter()
         .map(|v| v.as_str().unwrap())
         .collect();
-    assert_eq!(names.len(), 6);
+    assert_eq!(names.len(), 7);
     assert!(
         names
             .iter()
@@ -328,7 +330,7 @@ async fn sync_deactivates_templates_removed_from_disk() {
             .fetch_one(&app.db)
             .await
             .unwrap();
-    assert_eq!(active_count, 6);
+    assert_eq!(active_count, 7);
 }
 
 // The point of the sync endpoint: a `.typ` dropped into the templates dir
@@ -372,7 +374,7 @@ async fn sync_picks_up_new_template_and_renders_it_without_restart() {
             .unwrap(),
     )
     .unwrap();
-    assert_eq!(json["data"]["syncedCount"], 7);
+    assert_eq!(json["data"]["syncedCount"], 8);
 
     let hot_key: String = sqlx::query_scalar("SELECT key FROM templates WHERE name = 'hot-add'")
         .fetch_one(&app.db)
