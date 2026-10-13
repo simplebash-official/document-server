@@ -117,6 +117,8 @@ by default may not point at private or internal addresses.
 | `DATABASE_URL` | `sqlite://document_server.db` | SQLite file for template metadata and render history |
 | `TEMPLATES_DIR` / `FONTS_DIR` | `templates` / `fonts` | Where templates and fonts are read from |
 | `MAX_RENDER_BODY_BYTES` | `5242880` (5 MiB) | Largest render request |
+| `RATE_LIMIT_BURST` / `RATE_LIMIT_REFILL_PER_SEC` | `60` / `20` | Per-client request bucket (client = nginx `X-Real-IP`) |
+| `RATE_LIMIT_RENDER_BURST` / `RATE_LIMIT_RENDER_REFILL_PER_SEC` | `20` / `5` | Tighter per-client bucket for `/api/render` |
 | `REMOTE_IMAGE_FETCH_ENABLED` | `true` | Allow `logoUrl` downloads |
 | `REMOTE_IMAGE_MAX_BYTES` / `REMOTE_IMAGE_TIMEOUT_SECS` | 5 MiB / `10` | Limits for those downloads |
 | `ALLOW_PRIVATE_IP_IMAGES` | `false` | Allow downloads from private / internal addresses (local development only) |

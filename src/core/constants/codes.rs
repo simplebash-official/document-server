@@ -5,6 +5,7 @@ pub const NOT_FOUND: &str = "NOT_FOUND";
 pub const VALIDATION_ERROR: &str = "VALIDATION_ERROR";
 pub const INTERNAL_SERVER_ERROR: &str = "INTERNAL_SERVER_ERROR";
 pub const UNAUTHORIZED: &str = "UNAUTHORIZED";
+pub const RATE_LIMITED: &str = "RATE_LIMITED";
 
 // Internal-caller auth (see `core::middleware::auth::InternalCaller`).
 pub const INTERNAL_API_KEY_INVALID: &str = "INTERNAL_API_KEY_INVALID";

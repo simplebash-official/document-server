@@ -14,5 +14,6 @@ pub mod id;
 pub mod logging;
 pub mod middleware;
 pub mod openapi;
+pub mod rate_limit;
 pub mod response;
 pub mod utils;
