@@ -18,7 +18,7 @@ pub(crate) enum TypstEngineError {
 /// which then fails the template's own field access, surfacing as the same
 /// `TypstEngineError::Compile` path as any other malformed payload rather
 /// than needing a special case here.
-fn json_to_dict(value: serde_json::Value) -> Dict {
+pub(crate) fn json_to_dict(value: serde_json::Value) -> Dict {
     match json_to_value(value) {
         Value::Dict(d) => d,
         _ => Dict::new(),

@@ -1,4 +1,14 @@
 {
-  "title": "USB-C Cable",
-  "reference": "SKU-00042"
+  "widthMm": 50,
+  "heightMm": 30,
+  "shopName": "SimpleBash Mobile",
+  "elements": [
+    { "id": "name", "type": "text", "source": "productName", "customText": null, "xMm": 2, "yMm": 1.5, "widthMm": 46, "heightMm": 6, "fontSizePt": 8, "bold": true, "align": "left" },
+    { "id": "code", "type": "barcode", "xMm": 2, "yMm": 8, "widthMm": 46, "heightMm": 15, "showValue": true, "fontSizePt": 6 },
+    { "id": "price", "type": "text", "source": "price", "customText": null, "xMm": 2, "yMm": 24, "widthMm": 46, "heightMm": 5, "fontSizePt": 9, "bold": true, "align": "right" }
+  ],
+  "labels": [
+    { "name": "USB-C Cable 1m", "sku": "CAB-USB-0042", "category": "Cables", "priceCents": 125000, "code": "2000000000015", "copies": 2 },
+    { "name": "Tempered Glass 6.1in", "sku": "ACC-GLS-0007", "category": "Accessories", "priceCents": 45000, "code": "2000000000022", "copies": 1 }
+  ]
 }

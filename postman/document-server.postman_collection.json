@@ -143,14 +143,14 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"title\": \"USB-C Cable\",\n  \"reference\": \"SKU-00042\"\n}",
+              "raw": "{\n  \"widthMm\": 50,\n  \"heightMm\": 30,\n  \"shopName\": \"SimpleBash Mobile\",\n  \"elements\": [\n    {\n      \"id\": \"name\",\n      \"type\": \"text\",\n      \"source\": \"productName\",\n      \"customText\": null,\n      \"xMm\": 2,\n      \"yMm\": 1.5,\n      \"widthMm\": 46,\n      \"heightMm\": 6,\n      \"fontSizePt\": 8,\n      \"bold\": true,\n      \"align\": \"left\"\n    },\n    {\n      \"id\": \"code\",\n      \"type\": \"barcode\",\n      \"xMm\": 2,\n      \"yMm\": 8,\n      \"widthMm\": 46,\n      \"heightMm\": 15,\n      \"showValue\": true,\n      \"fontSizePt\": 6\n    },\n    {\n      \"id\": \"price\",\n      \"type\": \"text\",\n      \"source\": \"price\",\n      \"customText\": null,\n      \"xMm\": 2,\n      \"yMm\": 24,\n      \"widthMm\": 46,\n      \"heightMm\": 5,\n      \"fontSizePt\": 9,\n      \"bold\": true,\n      \"align\": \"right\"\n    }\n  ],\n  \"labels\": [\n    {\n      \"name\": \"USB-C Cable 1m\",\n      \"sku\": \"CAB-USB-0042\",\n      \"category\": \"Cables\",\n      \"priceCents\": 125000,\n      \"code\": \"2000000000015\",\n      \"copies\": 2\n    },\n    {\n      \"name\": \"Tempered Glass 6.1in\",\n      \"sku\": \"ACC-GLS-0007\",\n      \"category\": \"Accessories\",\n      \"priceCents\": 45000,\n      \"code\": \"2000000000022\",\n      \"copies\": 1\n    }\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
                 }
               }
             },
-            "description": "Compiles the `sticker` label template (50mm\u00d730mm thermal label) with a Code128 barcode and QR code encoding `reference` via `templates/lib/codes.typ`. Returns raw PDF bytes on success."
+            "description": "Compiles the Product Sticker Label template: a shop-designed layout (`widthMm`, `heightMm`, absolutely placed `elements`) and the `labels` to print, one PDF page per sticker (`copies` repeats a sticker). Barcodes are Code128 and QR codes encode each sticker's `code`. Returns raw PDF bytes on success."
           },
           "response": []
         },

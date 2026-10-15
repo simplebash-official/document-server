@@ -3,7 +3,7 @@
 ## First-party
 
 - **`money.typ`** — `format-money(cents)` → `"Rs. 1,234.50"`, mirrors the frontend's `formatMoney()`.
-- **`codes.typ`** / **`barcode.typ`** / **`qrcode.typ`** — barcode/QR helpers for the sticker label.
+- **`codes.typ`** / **`barcode.typ`** / **`qrcode.typ`** — barcode/QR helpers (the sticker label calls `tiaoma` directly for Code128 so it can control the caption and quiet zones, and `qrcode.typ` for QR).
 - **`charts.typ`** — tiny hand-rolled chart primitives (`column-chart`, `stacked-column-chart`, `hbar-chart`, `line-chart`, `share-bar`) used by the Analytics Report template. Built only from `rect`/`line`/`place`/`grid`/`layout` — deliberately **not** a vendored `cetz`/`cetz-plot` (those are LGPL-3.0 and slow to compile, and a business report only needs bars + a line). Add chart types here as report templates need them.
 
 ## Vendored packages

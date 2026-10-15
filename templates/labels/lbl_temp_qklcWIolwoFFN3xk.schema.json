@@ -1,12 +1,99 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Product Sticker Label",
-  "description": "Input contract for the Product Sticker Label template — a 50mm x 30mm label carrying the title text plus a Code128 barcode and QR code both encoding `reference`.",
+  "description": "Input contract for the Product Sticker Label template: a shop-designed label layout (size plus absolutely placed text, barcode, QR code and line elements) and the stickers to print with it. One page per sticker; every barcode is Code128 and every QR code encodes the sticker's `code`.",
   "type": "object",
-  "additionalProperties": true,
-  "required": ["title", "reference"],
+  "additionalProperties": false,
+  "required": ["widthMm", "heightMm", "shopName", "elements", "labels"],
   "properties": {
-    "title": { "type": "string" },
-    "reference": { "type": "string" }
+    "widthMm": { "type": "number", "minimum": 20, "maximum": 120 },
+    "heightMm": { "type": "number", "minimum": 10, "maximum": 200 },
+    "shopName": { "type": "string" },
+    "elements": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 30,
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "type", "source", "customText", "xMm", "yMm", "widthMm", "heightMm", "fontSizePt", "bold", "align"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1, "maxLength": 64 },
+              "type": { "const": "text" },
+              "source": { "enum": ["productName", "price", "sku", "code", "category", "shopName", "customText"] },
+              "customText": { "type": ["string", "null"], "maxLength": 200 },
+              "xMm": { "type": "number", "minimum": 0 },
+              "yMm": { "type": "number", "minimum": 0 },
+              "widthMm": { "type": "number", "minimum": 1 },
+              "heightMm": { "type": "number", "minimum": 1 },
+              "fontSizePt": { "type": "number", "minimum": 4, "maximum": 72 },
+              "bold": { "type": "boolean" },
+              "align": { "enum": ["left", "center", "right"] }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "type", "xMm", "yMm", "widthMm", "heightMm", "showValue", "fontSizePt"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1, "maxLength": 64 },
+              "type": { "const": "barcode" },
+              "xMm": { "type": "number", "minimum": 0 },
+              "yMm": { "type": "number", "minimum": 0 },
+              "widthMm": { "type": "number", "minimum": 1 },
+              "heightMm": { "type": "number", "minimum": 1 },
+              "showValue": { "type": "boolean" },
+              "fontSizePt": { "type": "number", "minimum": 4, "maximum": 72 }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "type", "xMm", "yMm", "widthMm", "heightMm"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1, "maxLength": 64 },
+              "type": { "const": "qr" },
+              "xMm": { "type": "number", "minimum": 0 },
+              "yMm": { "type": "number", "minimum": 0 },
+              "widthMm": { "type": "number", "minimum": 1 },
+              "heightMm": { "type": "number", "minimum": 1 }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "type", "xMm", "yMm", "widthMm", "heightMm"],
+            "properties": {
+              "id": { "type": "string", "minLength": 1, "maxLength": 64 },
+              "type": { "const": "line" },
+              "xMm": { "type": "number", "minimum": 0 },
+              "yMm": { "type": "number", "minimum": 0 },
+              "widthMm": { "type": "number", "minimum": 0.1 },
+              "heightMm": { "type": "number", "minimum": 0.1 }
+            }
+          }
+        ]
+      }
+    },
+    "labels": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 500,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "sku", "category", "priceCents", "code", "copies"],
+        "properties": {
+          "name": { "type": "string" },
+          "sku": { "type": "string" },
+          "category": { "type": "string" },
+          "priceCents": { "type": ["integer", "null"], "minimum": 0 },
+          "code": { "type": "string", "minLength": 1, "maxLength": 64 },
+          "copies": { "type": "integer", "minimum": 1, "maximum": 500 }
+        }
+      }
+    }
   }
 }

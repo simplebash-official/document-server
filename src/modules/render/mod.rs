@@ -6,6 +6,6 @@
 // `GET /api/documents/{key}/pdf`) calls `service::compile_pdf` here so a
 // reprint goes through the exact same Typst-compile-error -> `AppError`
 // mapping `render_template` uses, instead of duplicating it.
-mod repository;
+pub(crate) mod repository;
 pub mod routes;
 pub(crate) mod service;

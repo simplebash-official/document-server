@@ -92,11 +92,12 @@ async fn list_templates_returns_every_seeded_template_with_type_and_expected_dat
 
     let sticker_tpl = by_desc("Product Sticker Label");
     assert_eq!(sticker_tpl["type"], "label");
-    assert_eq!(sticker_tpl["data"]["title"], "USB-C Cable");
-    assert_eq!(sticker_tpl["data"]["reference"], "SKU-00042");
+    assert_eq!(sticker_tpl["data"]["shopName"], "SimpleBash Mobile");
+    assert_eq!(sticker_tpl["data"]["widthMm"], 50);
     let required = sticker_tpl["dataSchema"]["required"].as_array().unwrap();
-    assert!(required.iter().any(|r| r == "title"));
-    assert!(required.iter().any(|r| r == "reference"));
+    for field in ["widthMm", "heightMm", "shopName", "elements", "labels"] {
+        assert!(required.iter().any(|r| r == field), "{field} is required");
+    }
 }
 
 #[tokio::test]
@@ -174,7 +175,7 @@ async fn list_templates_filters_by_type() {
             .starts_with("lbl_temp_")
     );
     assert_eq!(templates[0]["type"], "label");
-    assert_eq!(templates[0]["data"]["reference"], "SKU-00042");
+    assert_eq!(templates[0]["data"]["shopName"], "SimpleBash Mobile");
 }
 
 #[tokio::test]
@@ -215,12 +216,11 @@ async fn get_template_by_key_returns_that_template_with_data() {
             .starts_with("lbl_temp_")
     );
     assert_eq!(json["data"]["type"], "label");
-    assert_eq!(json["data"]["data"]["title"], "USB-C Cable");
-    assert_eq!(json["data"]["data"]["reference"], "SKU-00042");
+    assert_eq!(json["data"]["data"]["shopName"], "SimpleBash Mobile");
     // Single-template fetch exposes the schema contract too — this is what
     // an integration client reads to learn how to feed a render.
     let required = json["data"]["dataSchema"]["required"].as_array().unwrap();
-    assert_eq!(required.len(), 2);
+    assert_eq!(required.len(), 5);
 }
 
 #[tokio::test]

@@ -516,10 +516,7 @@ async fn render_sticker_returns_pdf_and_records_document() {
             .await
             .expect("sticker template should be synced from disk by spawn_app");
 
-    let body = json!({
-        "title": "USB-C Cable",
-        "reference": "SKU-00042",
-    });
+    let body = sticker_sample();
     let response = app
         .router
         .clone()
@@ -600,8 +597,7 @@ async fn render_sticker_with_missing_field_returns_422() {
             .await
             .expect("sticker template should be synced from disk by spawn_app");
 
-    // Missing every field `sticker.typ` reads off `data` — fails at
-    // `data.title` access during compilation.
+    // Missing every required field: the schema rejects it before Typst runs.
     let response = app
         .router
         .oneshot(
@@ -623,6 +619,90 @@ async fn render_sticker_with_missing_field_returns_422() {
             .unwrap(),
     )
     .unwrap();
+    assert_eq!(json["code"], "RENDER_VALIDATION_FAILED");
+}
+
+/// The label template's own sidecar sample: a 50x30mm layout and two stickers.
+fn sticker_sample() -> serde_json::Value {
+    serde_json::from_str(include_str!(
+        "../templates/labels/lbl_temp_qklcWIolwoFFN3xk.json"
+    ))
+    .expect("sticker sample is valid JSON")
+}
+
+/// Posts `body` to the sticker template and returns the status and parsed JSON
+/// error body (`Null` for a PDF response).
+async fn render_sticker_with(body: serde_json::Value) -> (StatusCode, serde_json::Value) {
+    let app = common::spawn_app().await;
+    let template_key: String =
+        sqlx::query_scalar("SELECT key FROM templates WHERE description = ?")
+            .bind("Product Sticker Label")
+            .fetch_one(&app.db)
+            .await
+            .expect("sticker template should be synced from disk by spawn_app");
+    let response = app
+        .router
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/render/{template_key}"))
+                .header("content-type", "application/json")
+                .header("X-Internal-Api-Key", &app.config.internal_api_key)
+                .body(Body::from(body.to_string()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let status = response.status();
+    let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let json = serde_json::from_slice(&bytes).unwrap_or(serde_json::Value::Null);
+    (status, json)
+}
+
+#[tokio::test]
+async fn render_sticker_with_qr_and_line_elements_returns_pdf() {
+    let mut body = sticker_sample();
+    body["widthMm"] = json!(40);
+    body["elements"] = json!([
+        {"id": "q", "type": "qr", "xMm": 1, "yMm": 1, "widthMm": 16, "heightMm": 16},
+        {"id": "l", "type": "line", "xMm": 1, "yMm": 18, "widthMm": 38, "heightMm": 0.3},
+        {"id": "c", "type": "text", "source": "customText", "customText": "Warranty",
+         "xMm": 1, "yMm": 20, "widthMm": 38, "heightMm": 5, "fontSizePt": 6,
+         "bold": false, "align": "center"}
+    ]);
+    let (status, _) = render_sticker_with(body).await;
+    assert_eq!(status, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn render_sticker_rejects_an_unknown_element_type() {
+    let mut body = sticker_sample();
+    body["elements"] = json!([
+        {"id": "x", "type": "image", "xMm": 0, "yMm": 0, "widthMm": 5, "heightMm": 5}
+    ]);
+    let (status, json) = render_sticker_with(body).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(json["code"], "RENDER_VALIDATION_FAILED");
+}
+
+#[tokio::test]
+async fn render_sticker_rejects_a_price_element_without_a_price() {
+    let mut body = sticker_sample();
+    body["labels"][0]["priceCents"] = serde_json::Value::Null;
+    let (status, json) = render_sticker_with(body).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(json["code"], "RENDER_VALIDATION_FAILED");
+}
+
+#[tokio::test]
+async fn render_sticker_rejects_a_job_over_the_page_cap() {
+    let mut body = sticker_sample();
+    body["labels"][0]["copies"] = json!(300);
+    body["labels"][1]["copies"] = json!(300);
+    let (status, json) = render_sticker_with(body).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     assert_eq!(json["code"], "RENDER_VALIDATION_FAILED");
 }
 

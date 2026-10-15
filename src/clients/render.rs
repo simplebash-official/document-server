@@ -359,6 +359,18 @@ mod tests {
 
     use super::*;
 
+    /// The sticker template's own sidecar sample (a 50x30mm layout, 3 stickers).
+    fn sticker_sample() -> serde_json::Value {
+        serde_json::from_str(include_str!(
+            "../../templates/labels/lbl_temp_qklcWIolwoFFN3xk.json"
+        ))
+        .expect("sticker sample is valid JSON")
+    }
+
+    fn sticker_input() -> Dict {
+        crate::modules::render::repository::typst::json_to_dict(sticker_sample())
+    }
+
     /// Templates on disk have opaque generated names now; a test that wants
     /// "the thermal receipt" resolves it through the human label carried in
     /// the schema `title` (surfaced as `DiscoveredTemplate::description`).
@@ -455,16 +467,61 @@ mod tests {
         // The vendored library files must never be mistaken for templates.
         assert!(!engine.known_templates().iter().any(|t| t.name == "lib"));
 
-        let mut input = Dict::new();
-        input.insert(Str::from("title"), "USB-C Cable".into_value());
-        input.insert(Str::from("reference"), "SKU-00042".into_value());
-
-        let warned = engine.compile(&template_name, input);
+        let warned = engine.compile(&template_name, sticker_input());
         let doc = warned.output.expect("sticker template should compile");
+
+        // The sample prints 2 + 1 stickers, one page each, sized by the payload.
+        assert_eq!(doc.pages().len(), 3);
+        let size = doc.pages()[0].frame.size();
+        assert!(
+            (size.x.to_mm() - 50.0).abs() < 0.01,
+            "width {}",
+            size.x.to_mm()
+        );
+        assert!(
+            (size.y.to_mm() - 30.0).abs() < 0.01,
+            "height {}",
+            size.y.to_mm()
+        );
 
         let pdf_bytes =
             typst_pdf::pdf(&doc, &Default::default()).expect("pdf export should succeed");
         assert!(pdf_bytes.starts_with(b"%PDF-"));
+    }
+
+    #[test]
+    fn sticker_page_size_follows_the_payload() {
+        let engine = RenderEngine::warm_up("templates", "fonts").expect("warm_up should succeed");
+        let name = discovered(&engine, "Product Sticker Label").name.clone();
+        let mut sample = sticker_sample();
+        sample["widthMm"] = serde_json::json!(58);
+        sample["heightMm"] = serde_json::json!(40);
+        sample["elements"][1]["widthMm"] = serde_json::json!(54);
+
+        let doc = engine
+            .compile(
+                &name,
+                crate::modules::render::repository::typst::json_to_dict(sample),
+            )
+            .output
+            .expect("a resized sticker should compile");
+        let size = doc.pages()[0].frame.size();
+        assert!((size.x.to_mm() - 58.0).abs() < 0.01);
+        assert!((size.y.to_mm() - 40.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn sticker_with_a_price_element_but_no_price_fails_to_compile() {
+        let engine = RenderEngine::warm_up("templates", "fonts").expect("warm_up should succeed");
+        let name = discovered(&engine, "Product Sticker Label").name.clone();
+        let mut sample = sticker_sample();
+        sample["labels"][0]["priceCents"] = serde_json::Value::Null;
+
+        let warned = engine.compile(
+            &name,
+            crate::modules::render::repository::typst::json_to_dict(sample),
+        );
+        assert!(warned.output.is_err());
     }
 
     #[test]
@@ -473,11 +530,7 @@ mod tests {
         let name = discovered(&engine, "Product Sticker Label").name.clone();
         let rel = engine.template_rel_path(&name).unwrap().to_string();
 
-        let mut input = Dict::new();
-        input.insert(Str::from("title"), "USB-C Cable".into_value());
-        input.insert(Str::from("reference"), "SKU-00042".into_value());
-
-        let warned = engine.compile_once(&rel, input);
+        let warned = engine.compile_once(&rel, sticker_input());
         let doc = warned
             .output
             .expect("compile_once should compile the sticker");

@@ -8,7 +8,6 @@ mod common;
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
-use serde_json::json;
 use tower::ServiceExt;
 
 /// Renders the seed `sticker` template once and returns the `documents.key`
@@ -21,7 +20,10 @@ async fn render_a_sticker(app: &common::TestApp) -> String {
             .await
             .expect("sticker template should be synced from disk by spawn_app");
 
-    let body = json!({"title": "USB-C Cable", "reference": "SKU-00042"});
+    let body: serde_json::Value = serde_json::from_str(include_str!(
+        "../templates/labels/lbl_temp_qklcWIolwoFFN3xk.json"
+    ))
+    .expect("sticker sample is valid JSON");
     let response = app
         .router
         .clone()
@@ -73,7 +75,7 @@ async fn list_documents_returns_every_recorded_document() {
     let documents = json["data"]["documents"].as_array().unwrap();
     assert_eq!(documents.len(), 1);
     assert_eq!(documents[0]["key"], key);
-    assert_eq!(documents[0]["data"]["reference"], "SKU-00042");
+    assert_eq!(documents[0]["data"]["shopName"], "SimpleBash Mobile");
 }
 
 #[tokio::test]
@@ -102,7 +104,7 @@ async fn get_document_by_key_returns_that_document() {
     .unwrap();
 
     assert_eq!(json["data"]["key"], key);
-    assert_eq!(json["data"]["data"]["title"], "USB-C Cable");
+    assert_eq!(json["data"]["data"]["shopName"], "SimpleBash Mobile");
 }
 
 #[tokio::test]
