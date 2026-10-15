@@ -54,7 +54,7 @@
     }))
   } else if el.type == "barcode" {
     // The caption is ours (not Zint's) so its size follows the element's font size.
-    let caption-height = if el.showValue { el.fontSizePt * 1.25 * 1pt + 1pt } else { 0pt }
+    let caption-height = if el.showValue { el.fontSizePt * 1.25 * 1pt + 2pt } else { 0pt }
     place-at(box(width: width, height: height, clip: true, {
       tiaoma.barcode(
         label.code,
@@ -65,7 +65,7 @@
         options: (show-hrt: false, output-options: (barcode-quiet-zones: true)),
       )
       if el.showValue {
-        v(1pt)
+        v(2pt)
         align(center, text(size: el.fontSizePt * 1pt, label.code))
       }
     }))
