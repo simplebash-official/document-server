@@ -510,6 +510,76 @@ mod tests {
         assert!((size.y.to_mm() - 40.0).abs() < 0.01);
     }
 
+    /// Font sizes (pt) of every run of text in `frame` whose text contains `needle`.
+    fn text_sizes(frame: &typst::layout::Frame, needle: &str) -> Vec<f64> {
+        let mut sizes = Vec::new();
+        for (_, item) in frame.items() {
+            match item {
+                typst::layout::FrameItem::Group(group) => {
+                    sizes.extend(text_sizes(&group.frame, needle))
+                }
+                typst::layout::FrameItem::Text(text) if text.text.contains(needle) => {
+                    sizes.push(text.size.to_pt())
+                }
+                _ => {}
+            }
+        }
+        sizes
+    }
+
+    /// Compiles the sample with its first sticker renamed and returns that page.
+    fn first_sticker_named(name: &str) -> PagedDocument {
+        let engine = RenderEngine::warm_up("templates", "fonts").expect("warm_up should succeed");
+        let template = discovered(&engine, "Product Sticker Label").name.clone();
+        let mut sample = sticker_sample();
+        sample["labels"][0]["name"] = serde_json::json!(name);
+        engine
+            .compile(
+                &template,
+                crate::modules::render::repository::typst::json_to_dict(sample),
+            )
+            .output
+            .expect("the sticker should compile")
+    }
+
+    #[test]
+    fn sticker_text_that_fits_keeps_its_own_size() {
+        // The sample's name element is 8pt bold in a 46 x 6 mm box.
+        let doc = first_sticker_named("Cable");
+        let sizes = text_sizes(&doc.pages()[0].frame, "Cable");
+        assert!(!sizes.is_empty(), "the name should be printed");
+        assert!(
+            sizes.iter().all(|size| (size - 8.0).abs() < 0.01),
+            "{sizes:?}"
+        );
+    }
+
+    #[test]
+    fn sticker_text_too_long_for_its_box_shrinks_instead_of_being_cut() {
+        let doc = first_sticker_named(
+            "Samsung Galaxy A15 Silicone Back Cover with Camera Protection Navy Blue",
+        );
+        let sizes = text_sizes(&doc.pages()[0].frame, "Samsung");
+        assert!(!sizes.is_empty(), "the start of the name should be printed");
+        assert!(
+            sizes.iter().all(|size| *size < 8.0 && *size >= 4.0),
+            "{sizes:?}"
+        );
+        // The end of the name is on the label too, not clipped away.
+        assert!(!text_sizes(&doc.pages()[0].frame, "Blue").is_empty());
+    }
+
+    #[test]
+    fn sticker_text_never_shrinks_below_the_smallest_printable_size() {
+        let doc = first_sticker_named(&"Very long item name ".repeat(40));
+        let sizes = text_sizes(&doc.pages()[0].frame, "Very");
+        assert!(!sizes.is_empty());
+        assert!(
+            sizes.iter().all(|size| (size - 4.0).abs() < 0.01),
+            "{sizes:?}"
+        );
+    }
+
     #[test]
     fn sticker_with_a_price_element_but_no_price_fails_to_compile() {
         let engine = RenderEngine::warm_up("templates", "fonts").expect("warm_up should succeed");

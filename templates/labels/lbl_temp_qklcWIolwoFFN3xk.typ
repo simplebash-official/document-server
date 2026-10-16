@@ -3,6 +3,7 @@
 // sibling .schema.json. One page per sticker, the page is exactly the label.
 // Every element is absolutely placed in millimetres, so the same template serves any label
 // size a shop designs. Barcodes are always Code128, QR codes encode the same `code`.
+// Text shrinks to fit its box (never below 4pt), so long names print whole.
 #import "../lib/tiaoma/lib.typ" as tiaoma
 #import "../lib/qrcode.typ": qrcode
 #import "../lib/money.typ": format-money
@@ -41,6 +42,21 @@
 
 #let alignment-of(name) = if name == "left" { left } else if name == "center" { center } else { right }
 
+// The smallest text the label printer still prints legibly (matches the designer's minimum).
+#let min-font = 4pt
+
+// Shrinks the text in 0.5pt steps until it fits its box, so a long item name is printed
+// whole instead of cut off. Only text that would not fit even at `min-font` is clipped.
+#let fitted-text(body, width, height, size, weight, alignment) = context {
+  let laid(s) = block(width: width, {
+    set text(size: s, weight: weight)
+    align(alignment, body)
+  })
+  let s = size
+  while s > min-font and measure(laid(s)).height > height { s -= 0.5pt }
+  laid(calc.max(s, min-font))
+}
+
 #let draw(el, label) = {
   let width = el.widthMm * 1mm
   let height = el.heightMm * 1mm
@@ -48,9 +64,15 @@
 
   if el.type == "text" {
     place-at(box(width: width, height: height, clip: true, {
-      set text(size: el.fontSizePt * 1pt, weight: if el.bold { "bold" } else { "regular" })
       set par(justify: false)
-      align(alignment-of(el.align), text-value(el, label))
+      fitted-text(
+        text-value(el, label),
+        width,
+        height,
+        el.fontSizePt * 1pt,
+        if el.bold { "bold" } else { "regular" },
+        alignment-of(el.align),
+      )
     }))
   } else if el.type == "barcode" {
     // The caption is ours (not Zint's) so its size follows the element's font size.
