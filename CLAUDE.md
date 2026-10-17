@@ -43,6 +43,13 @@ A task is not done until everything in this codebase that *can* be tested, and e
 
 **This repo's gate:** `make check` (`cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, `cargo test`), plus `pos/backend`'s schema-drift tests (`print_payload::schema_drift_tests`) whenever a template contract changes.
 
+**Run all of these before you say a task is finished** (a backend feature once reached CI with clippy errors, a permission that was too wide and undocumented routes, none of which a partial run catches):
+
+1. `cargo clippy --all-targets --all-features -- -D warnings` on the current stable Rust (`rustup update` first). This is exactly what CI runs; `cargo clippy --fix --allow-dirty` clears most of it. `cargo build`/`cargo test` alone do not run clippy.
+2. The **whole** `cargo test` (`--no-fail-fast`, so one failing binary does not hide the rest), then `pos/backend`'s schema-drift tests (`print_payload::schema_drift_tests`) whenever a template contract changes.
+3. New or changed routes: keep their OpenAPI/auth annotations in step with what the handler really enforces, and test the failure paths.
+4. After pushing, watch the run (`gh run list --limit 3`, `gh run view <id> --log-failed`) until it is green. Pushing is a separate, deliberate step, so ask first.
+
 # Commands
 
 - `cargo build` / `cargo run` (equivalent to `cargo run --bin document_server`)
