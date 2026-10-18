@@ -158,11 +158,15 @@ fn is_semver(value: &str) -> bool {
 /// true boundary is the engine's file resolver rooted at `TEMPLATES_DIR`; this
 /// keeps an honest package from depending on anything it does not ship.
 fn check_paths(source: &str, assets: &[(String, Vec<u8>)]) -> Result<(), String> {
+    // Comments are not code: a commented-out `image("…")` must not fail the lint. A `//` only starts
+    // a comment at the start of a line or after whitespace, so `"https://…"` strings are left alone.
+    let comments = Regex::new(r"(?s)/\*.*?\*/|(?m)(^|\s)//.*$").expect("static regex");
+    let source = comments.replace_all(source, "$1");
     let pattern = Regex::new(
         r#"(?:#import|#include)\s+"([^"]+)"|\b(?:image|read|json|csv|xml|yaml|toml|cbor|bibliography)\(\s*"([^"]+)""#,
     )
     .expect("static regex");
-    for capture in pattern.captures_iter(source) {
+    for capture in pattern.captures_iter(&source) {
         let path = capture
             .get(1)
             .or_else(|| capture.get(2))
@@ -245,6 +249,13 @@ mod tests {
         assert!(check_paths(r#"#image("assets/sign.png")"#, &assets).is_ok());
         assert!(check_paths(r#"#image("assets/other.png")"#, &assets).is_err());
         assert!(check_paths(r#"#image("../other/x.png")"#, &assets).is_err());
+    }
+
+    #[test]
+    fn commented_out_paths_are_not_checked() {
+        assert!(check_paths("// #image(\"assets/missing.png\")\n= Hi", &[]).is_ok());
+        assert!(check_paths("/* #import \"../lib/x.typ\" */\n= Hi", &[]).is_ok());
+        assert!(check_paths("#import \"../lib/x.typ\" // not a comment trick", &[]).is_err());
     }
 
     #[test]

@@ -5,5 +5,6 @@
 // in `modules::templates`; this module owns the archive format and the files
 // under `TEMPLATES_DIR/packages/`.
 pub(crate) mod archive;
+pub mod dry_run;
 pub mod routes;
 pub(crate) mod service;
