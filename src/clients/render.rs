@@ -3,28 +3,38 @@
 // shape as `clients::sqlite::connect`. Per-request compile orchestration
 // (JSON -> Typst input, error translation) lives in
 // `modules::render::repository::typst`, not here — this module only owns
-// the engine's lifecycle: reading fonts/templates off disk once and
-// building the `TypstEngine`.
+// the engine's lifecycle: reading fonts off disk once, discovering the
+// bundled templates, and building the `TypstEngine`.
+//
+// Only the bundled templates (`documents/`, `labels/`) are known to the
+// engine. Private packages live in `packages/<name>/`, are looked up by the
+// `file_path` stored in their `templates` row, and always compile through
+// `compile_once`, so published files never enter a shared cache and no engine
+// rebuild is ever needed to add one.
 
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use sha2::{Digest, Sha256};
 use typst::foundations::Dict;
 use typst_as_lib::{TypstEngine, TypstTemplateCollection};
 use typst_layout::PagedDocument;
 
-use crate::domain::templates::TemplateType;
+use crate::domain::templates::{TemplateType, validate_template_schema};
+
+/// Subdirectory of `TEMPLATES_DIR` that holds private packages. Never scanned
+/// as bundled templates.
+pub const PACKAGES_SUBDIR: &str = "packages";
 
 /// Filename prefix for a per-render temp image (a downloaded `logoUrl`)
-/// staged next to a template. Dot-prefixed so `scan_templates` skips it and
-/// so `warm_up`'s sweep can recognise and delete any left by a crash.
+/// staged next to a template. Dot-prefixed so the scan skips it and so
+/// `warm_up`'s sweep can recognise and delete any left by a crash.
 pub const REMOTE_IMAGE_PREFIX: &str = ".rimg_";
 
 /// Why `RenderEngine::warm_up` failed. A misconfigured `TEMPLATES_DIR`/
-/// `FONTS_DIR` is a hard startup error — same fail-fast posture as
-/// `Config::from_env()` — an operator should find out at boot, not on the
-/// first render request.
+/// `FONTS_DIR` or a broken bundled template is a hard startup error — same
+/// fail-fast posture as `Config::from_env()` — an operator should find out at
+/// boot, not on the first render request.
 #[derive(Debug, thiserror::Error)]
 pub enum RenderEngineError {
     #[error("could not read fonts directory {path}: {source}")]
@@ -37,35 +47,33 @@ pub enum RenderEngineError {
         path: std::path::PathBuf,
         source: std::io::Error,
     },
+    #[error("bundled template {name} is invalid: {reason}")]
+    BundledTemplateInvalid { name: String, reason: String },
+    #[error(
+        "document kind '{kind}' must have exactly one bundled x-default template, found {count}"
+    )]
+    DefaultTemplateCount { kind: String, count: usize },
 }
 
-/// Metadata about a template discovered on disk during startup scan.
+/// A template shipped in `TEMPLATES_DIR/{documents,labels}`, read and
+/// validated at startup. `schema.json` and sample sidecars are mandatory.
 #[derive(Debug, Clone)]
-pub struct DiscoveredTemplate {
+pub struct BundledTemplate {
     pub name: String,
     pub file_path: String,
     pub template_type: TemplateType,
-    pub sample_data: Option<serde_json::Value>,
-    /// Parsed `<name>.schema.json` sidecar — the template's machine-readable
-    /// input contract (JSON Schema; drafts auto-detected from `$schema`).
-    /// `None` when no sidecar exists: that template renders without payload
-    /// validation, exactly as it did before schemas were introduced.
-    pub data_schema: Option<serde_json::Value>,
-    /// Human-readable label, taken from the schema sidecar's `title`. Since a
-    /// template's `name` is now an opaque generated id (`doc_temp_<nanoid>`),
-    /// this is what an operator/integration reads to tell templates apart —
-    /// it lands in the `templates.description` column. `None` when there is
-    /// no schema sidecar or it has no `title`.
-    pub description: Option<String>,
+    pub kind: String,
+    pub title: String,
+    pub is_default: bool,
+    pub data_schema: serde_json::Value,
+    pub sample_data: serde_json::Value,
+    /// Hex SHA-256 of the `.typ` source.
+    pub sha256: String,
 }
 
 pub struct RenderEngine {
     engine: TypstEngine<TypstTemplateCollection>,
-    // Every template found under `TEMPLATES_DIR` at warm-up time
-    // — feeds `templates::service::sync_templates_from_disk`'s upsert pass.
-    known_templates: Vec<DiscoveredTemplate>,
-    // Fast lookup from template name to relative file path
-    template_paths: HashMap<String, String>,
+    bundled: Vec<BundledTemplate>,
     // The templates root this engine was built against — reused by
     // `compile_once` to build a throwaway engine for a single render.
     templates_dir: PathBuf,
@@ -77,12 +85,12 @@ pub struct RenderEngine {
 
 impl RenderEngine {
     /// Builds the engine once: reads every font under `fonts_dir` into
-    /// memory (`.fonts()` takes owned bytes — a genuine preload), points
-    /// the engine at `templates_dir` via `with_file_system_resolver` (which
-    /// resolves `.typ` files, and any assets they reference, from disk by
-    /// relative path), then runs one best-effort trial compile per known
-    /// template purely to catch outright breakage (bad syntax, a missing asset,
-    /// a bad font family) before the first real request.
+    /// memory (`.fonts()` takes owned bytes — a genuine preload), discovers
+    /// and validates the bundled templates, points the engine at
+    /// `templates_dir` via `with_file_system_resolver`, then runs one
+    /// best-effort trial compile per bundled template purely to catch outright
+    /// breakage (bad syntax, a missing asset, a bad font family) before the
+    /// first real request.
     pub fn warm_up(
         templates_dir: impl AsRef<Path>,
         fonts_dir: impl AsRef<Path>,
@@ -91,24 +99,20 @@ impl RenderEngine {
         let fonts_dir = fonts_dir.as_ref();
 
         let fonts = Arc::new(read_font_files(fonts_dir)?);
-        let known_templates = scan_templates(templates_dir)?;
+        let bundled = scan_bundled(templates_dir)?;
+        check_one_default_per_kind(&bundled)?;
 
         // Delete any per-render temp images a previous process left behind
         // (crash between staging and cleanup). Best-effort — a failure here
         // must not block startup.
         sweep_remote_images(templates_dir);
 
-        let mut template_paths = HashMap::new();
-        for tpl in &known_templates {
-            template_paths.insert(tpl.name.clone(), tpl.file_path.clone());
-        }
-
         let engine = TypstEngine::builder()
             .fonts((*fonts).clone())
             .with_file_system_resolver(templates_dir.to_path_buf())
             .build();
 
-        for tpl in &known_templates {
+        for tpl in &bundled {
             let warned: typst::diag::Warned<Result<PagedDocument, typst_as_lib::TypstAsLibError>> =
                 engine.compile_with_input(&*tpl.file_path, Dict::new());
             if let Err(err) = warned.output {
@@ -126,30 +130,34 @@ impl RenderEngine {
 
         Ok(Self {
             engine,
-            known_templates,
-            template_paths,
+            bundled,
             templates_dir: templates_dir.to_path_buf(),
             fonts,
         })
     }
 
-    pub fn known_templates(&self) -> &[DiscoveredTemplate] {
-        &self.known_templates
+    pub fn bundled(&self) -> &[BundledTemplate] {
+        &self.bundled
     }
 
-    /// Relative path (from the templates root) of the `.typ` for `name`, or
-    /// `None` if unknown. `compile_once` needs this to name the main file.
-    pub(crate) fn template_rel_path(&self, name: &str) -> Option<&str> {
-        self.template_paths.get(name).map(String::as_str)
+    /// Compiles a bundled template through the shared engine. Only valid for
+    /// `file_path`s that were present at `warm_up`.
+    pub(crate) fn compile_bundled(
+        &self,
+        file_path: &str,
+        input: Dict,
+    ) -> typst::diag::Warned<Result<PagedDocument, typst_as_lib::TypstAsLibError>> {
+        self.engine.compile_with_input(file_path, input)
     }
 
     /// Compiles `main_rel_path` through a **freshly built, single-use**
-    /// engine rooted at this engine's templates dir. Used only for a render
-    /// that staged a downloaded image on disk: the throwaway engine — and
-    /// the unbounded file cache `with_file_system_resolver` gives it — is
-    /// dropped when this returns, so that image never lands in the shared
-    /// engine's cache (which would keep it in memory for the process's life).
-    /// Fonts are reused from the shared engine's preloaded bytes.
+    /// engine rooted at this engine's templates dir. Used for every private
+    /// package and for any render that staged a downloaded image on disk: the
+    /// throwaway engine — and the unbounded file cache
+    /// `with_file_system_resolver` gives it — is dropped when this returns, so
+    /// neither a package nor a staged image ever lands in the shared engine's
+    /// cache (which would keep it in memory for the process's life). Fonts are
+    /// reused from the shared engine's preloaded bytes.
     pub(crate) fn compile_once(
         &self,
         main_rel_path: &str,
@@ -161,20 +169,25 @@ impl RenderEngine {
             .build();
         engine.compile_with_input(main_rel_path, input)
     }
+}
 
-    /// Compiles a template by name with given input dictionary.
-    pub(crate) fn compile(
-        &self,
-        template_name: &str,
-        input: Dict,
-    ) -> typst::diag::Warned<Result<PagedDocument, typst_as_lib::TypstAsLibError>> {
-        let file_path = self
-            .template_paths
-            .get(template_name)
-            .cloned()
-            .unwrap_or_else(|| format!("{template_name}.typ"));
-        self.engine.compile_with_input(&*file_path, input)
+fn check_one_default_per_kind(bundled: &[BundledTemplate]) -> Result<(), RenderEngineError> {
+    let mut kinds: Vec<&str> = bundled.iter().map(|t| t.kind.as_str()).collect();
+    kinds.sort_unstable();
+    kinds.dedup();
+    for kind in kinds {
+        let count = bundled
+            .iter()
+            .filter(|t| t.kind == kind && t.is_default)
+            .count();
+        if count != 1 {
+            return Err(RenderEngineError::DefaultTemplateCount {
+                kind: kind.to_string(),
+                count,
+            });
+        }
     }
+    Ok(())
 }
 
 fn read_font_files(dir: &Path) -> Result<Vec<Vec<u8>>, RenderEngineError> {
@@ -214,81 +227,41 @@ fn read_font_files(dir: &Path) -> Result<Vec<Vec<u8>>, RenderEngineError> {
     Ok(fonts)
 }
 
-/// Scans `TEMPLATES_DIR` for `.typ` files in `documents/`, `labels/`, or root.
-/// Skips `lib/` and non-typ files.
-fn scan_templates(dir: &Path) -> Result<Vec<DiscoveredTemplate>, RenderEngineError> {
+/// Scans `TEMPLATES_DIR/documents` and `TEMPLATES_DIR/labels` for bundled
+/// `.typ` templates. Each needs its `<stem>.schema.json` and `<stem>.json`
+/// sidecars; anything unreadable or invalid fails startup.
+fn scan_bundled(dir: &Path) -> Result<Vec<BundledTemplate>, RenderEngineError> {
     let mut templates = Vec::new();
 
-    let entries =
-        std::fs::read_dir(dir).map_err(|source| RenderEngineError::TemplatesDirUnreadable {
-            path: dir.to_path_buf(),
-            source,
-        })?;
-
-    for entry in entries {
-        let entry = entry.map_err(|source| RenderEngineError::TemplatesDirUnreadable {
-            path: dir.to_path_buf(),
-            source,
-        })?;
-        let path = entry.path();
-        let file_name = entry.file_name();
-        let file_name_str = file_name.to_string_lossy();
-
-        if file_name_str == "lib" || file_name_str.starts_with('.') {
-            continue;
-        }
-
-        if path.is_dir() {
-            let sub_type = if file_name_str == "labels" {
-                TemplateType::Label
-            } else {
-                TemplateType::Document
-            };
-
-            let sub_entries = std::fs::read_dir(&path).map_err(|source| {
-                RenderEngineError::TemplatesDirUnreadable {
-                    path: path.clone(),
-                    source,
-                }
-            })?;
-
-            for sub_entry in sub_entries {
-                let sub_entry =
-                    sub_entry.map_err(|source| RenderEngineError::TemplatesDirUnreadable {
-                        path: path.clone(),
-                        source,
-                    })?;
-                let sub_path = sub_entry.path();
-                if sub_path.extension().and_then(|ext| ext.to_str()) == Some("typ")
-                    && let Some(stem) = sub_path.file_stem().and_then(|s| s.to_str())
-                {
-                    let (sample_data, data_schema) = read_sidecars(&sub_path);
-                    let description = schema_title(data_schema.as_ref());
-
-                    templates.push(DiscoveredTemplate {
-                        name: stem.to_string(),
-                        file_path: format!("{file_name_str}/{stem}.typ"),
-                        template_type: sub_type,
-                        sample_data,
-                        data_schema,
-                        description,
-                    });
-                }
+    for (subdir, template_type) in [
+        ("documents", TemplateType::Document),
+        ("labels", TemplateType::Label),
+    ] {
+        let sub_path = dir.join(subdir);
+        let entries = std::fs::read_dir(&sub_path).map_err(|source| {
+            RenderEngineError::TemplatesDirUnreadable {
+                path: sub_path.clone(),
+                source,
             }
-        } else if path.extension().and_then(|ext| ext.to_str()) == Some("typ")
-            && let Some(stem) = path.file_stem().and_then(|s| s.to_str())
-        {
-            let (sample_data, data_schema) = read_sidecars(&path);
-            let description = schema_title(data_schema.as_ref());
+        })?;
 
-            templates.push(DiscoveredTemplate {
-                name: stem.to_string(),
-                file_path: format!("{stem}.typ"),
-                template_type: TemplateType::Document,
-                sample_data,
-                data_schema,
-                description,
-            });
+        for entry in entries {
+            let path = entry
+                .map_err(|source| RenderEngineError::TemplatesDirUnreadable {
+                    path: sub_path.clone(),
+                    source,
+                })?
+                .path();
+            if path.extension().and_then(|ext| ext.to_str()) != Some("typ") {
+                continue;
+            }
+            let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
+                continue;
+            };
+            if stem.starts_with('.') {
+                continue;
+            }
+            templates.push(read_bundled(&path, stem, subdir, template_type)?);
         }
     }
 
@@ -296,24 +269,53 @@ fn scan_templates(dir: &Path) -> Result<Vec<DiscoveredTemplate>, RenderEngineErr
     Ok(templates)
 }
 
-/// Reads a `.typ` file's optional sidecars: `<stem>.json` (sample data, the
-/// long-standing convention) and `<stem>.schema.json` (the machine-readable
-/// input contract). Both are best-effort — an unparseable sidecar is treated
-/// as absent rather than failing startup, same tolerance the sample-data
-/// sidecar always had.
-fn read_sidecars(typ_path: &Path) -> (Option<serde_json::Value>, Option<serde_json::Value>) {
-    let sample_data = std::fs::read_to_string(typ_path.with_extension("json"))
-        .ok()
-        .and_then(|c| serde_json::from_str::<serde_json::Value>(&c).ok());
-    let data_schema = std::fs::read_to_string(typ_path.with_extension("schema.json"))
-        .ok()
-        .and_then(|c| serde_json::from_str::<serde_json::Value>(&c).ok());
+fn read_bundled(
+    typ_path: &Path,
+    stem: &str,
+    subdir: &str,
+    template_type: TemplateType,
+) -> Result<BundledTemplate, RenderEngineError> {
+    let invalid = |reason: String| RenderEngineError::BundledTemplateInvalid {
+        name: stem.to_string(),
+        reason,
+    };
 
-    (sample_data, data_schema)
+    let source =
+        std::fs::read(typ_path).map_err(|err| invalid(format!("cannot read .typ: {err}")))?;
+    let read_json = |ext: &str| -> Result<serde_json::Value, RenderEngineError> {
+        let path = typ_path.with_extension(ext);
+        let text = std::fs::read_to_string(&path)
+            .map_err(|err| invalid(format!("cannot read {}: {err}", path.display())))?;
+        serde_json::from_str(&text)
+            .map_err(|err| invalid(format!("{} is not valid JSON: {err}", path.display())))
+    };
+    let data_schema = read_json("schema.json")?;
+    let sample_data = read_json("json")?;
+    let info = validate_template_schema(&data_schema).map_err(invalid)?;
+
+    Ok(BundledTemplate {
+        name: stem.to_string(),
+        file_path: format!("{subdir}/{stem}.typ"),
+        template_type,
+        kind: info.kind,
+        title: info.title,
+        is_default: info.is_default,
+        data_schema,
+        sample_data,
+        sha256: sha256_hex(&source),
+    })
+}
+
+/// Lowercase hex SHA-256.
+pub fn sha256_hex(bytes: &[u8]) -> String {
+    Sha256::digest(bytes)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
 }
 
 /// Best-effort delete of every `REMOTE_IMAGE_PREFIX`-named temp image under
-/// `dir` and its immediate subdirectories (`documents/`, `labels/`, …). Runs
+/// `dir` and its immediate subdirectories (`documents/`, `labels/`, and each `packages/<name>/`). Runs
 /// at warm-up to clear anything a crashed render left behind; any IO error
 /// is swallowed — a stale temp file is harmless, a failed startup is not.
 fn sweep_remote_images(dir: &Path) {
@@ -340,17 +342,13 @@ fn sweep_remote_images(dir: &Path) {
             }
         }
     }
-}
-
-/// Pulls a template's human label out of its schema sidecar's `title` field.
-/// Blank/whitespace-only titles are treated as absent.
-fn schema_title(data_schema: Option<&serde_json::Value>) -> Option<String> {
-    data_schema
-        .and_then(|schema| schema.get("title"))
-        .and_then(|title| title.as_str())
-        .map(str::trim)
-        .filter(|title| !title.is_empty())
-        .map(str::to_string)
+    if let Ok(entries) = std::fs::read_dir(dir.join(PACKAGES_SUBDIR)) {
+        for entry in entries.flatten() {
+            if entry.path().is_dir() {
+                sweep_one(&entry.path());
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -371,15 +369,15 @@ mod tests {
         crate::modules::render::repository::typst::json_to_dict(sticker_sample())
     }
 
-    /// Templates on disk have opaque generated names now; a test that wants
+    /// Templates on disk have opaque generated names; a test that wants
     /// "the thermal receipt" resolves it through the human label carried in
-    /// the schema `title` (surfaced as `DiscoveredTemplate::description`).
-    fn discovered<'a>(engine: &'a RenderEngine, title: &str) -> &'a DiscoveredTemplate {
+    /// the schema `title`.
+    fn discovered<'a>(engine: &'a RenderEngine, title: &str) -> &'a BundledTemplate {
         engine
-            .known_templates()
+            .bundled()
             .iter()
-            .find(|t| t.description.as_deref() == Some(title))
-            .unwrap_or_else(|| panic!("no discovered template titled {title:?}"))
+            .find(|t| t.title == title)
+            .unwrap_or_else(|| panic!("no bundled template titled {title:?}"))
     }
 
     #[test]
@@ -387,7 +385,7 @@ mod tests {
         let engine = RenderEngine::warm_up("templates", "fonts").expect("warm_up should succeed");
         let template = discovered(&engine, "Thermal Receipt");
         assert_eq!(template.template_type, TemplateType::Document);
-        let template_name = template.name.clone();
+        let template_path = template.file_path.clone();
 
         let mut items = Vec::new();
         let mut item = Dict::new();
@@ -412,7 +410,7 @@ mod tests {
         input.insert(Str::from("tenderedAmountCents"), Value::Int(2000));
         input.insert(Str::from("changeDueCents"), Value::Int(2));
 
-        let warned = engine.compile(&template_name, input);
+        let warned = engine.compile_bundled(&template_path, input);
         let doc = warned
             .output
             .expect("thermal receipt template should compile");
@@ -427,7 +425,7 @@ mod tests {
         let engine = RenderEngine::warm_up("templates", "fonts").expect("warm_up should succeed");
         let template = discovered(&engine, "A4 Invoice");
         assert_eq!(template.template_type, TemplateType::Document);
-        let template_name = template.name.clone();
+        let template_path = template.file_path.clone();
 
         let mut items = Vec::new();
         let mut item = Dict::new();
@@ -450,7 +448,7 @@ mod tests {
         input.insert(Str::from("totalCents"), Value::Int(1998));
         input.insert(Str::from("paymentMethod"), "cash".into_value());
 
-        let warned = engine.compile(&template_name, input);
+        let warned = engine.compile_bundled(&template_path, input);
         let doc = warned.output.expect("a4 invoice template should compile");
 
         let pdf_bytes =
@@ -463,11 +461,11 @@ mod tests {
         let engine = RenderEngine::warm_up("templates", "fonts").expect("warm_up should succeed");
         let template = discovered(&engine, "Product Sticker Label");
         assert_eq!(template.template_type, TemplateType::Label);
-        let template_name = template.name.clone();
+        let template_path = template.file_path.clone();
         // The vendored library files must never be mistaken for templates.
-        assert!(!engine.known_templates().iter().any(|t| t.name == "lib"));
+        assert!(!engine.bundled().iter().any(|t| t.name == "lib"));
 
-        let warned = engine.compile(&template_name, sticker_input());
+        let warned = engine.compile_bundled(&template_path, sticker_input());
         let doc = warned.output.expect("sticker template should compile");
 
         // The sample prints 2 + 1 stickers, one page each, sized by the payload.
@@ -492,14 +490,16 @@ mod tests {
     #[test]
     fn sticker_page_size_follows_the_payload() {
         let engine = RenderEngine::warm_up("templates", "fonts").expect("warm_up should succeed");
-        let name = discovered(&engine, "Product Sticker Label").name.clone();
+        let name = discovered(&engine, "Product Sticker Label")
+            .file_path
+            .clone();
         let mut sample = sticker_sample();
         sample["widthMm"] = serde_json::json!(58);
         sample["heightMm"] = serde_json::json!(40);
         sample["elements"][1]["widthMm"] = serde_json::json!(54);
 
         let doc = engine
-            .compile(
+            .compile_bundled(
                 &name,
                 crate::modules::render::repository::typst::json_to_dict(sample),
             )
@@ -530,11 +530,13 @@ mod tests {
     /// Compiles the sample with its first sticker renamed and returns that page.
     fn first_sticker_named(name: &str) -> PagedDocument {
         let engine = RenderEngine::warm_up("templates", "fonts").expect("warm_up should succeed");
-        let template = discovered(&engine, "Product Sticker Label").name.clone();
+        let template = discovered(&engine, "Product Sticker Label")
+            .file_path
+            .clone();
         let mut sample = sticker_sample();
         sample["labels"][0]["name"] = serde_json::json!(name);
         engine
-            .compile(
+            .compile_bundled(
                 &template,
                 crate::modules::render::repository::typst::json_to_dict(sample),
             )
@@ -583,11 +585,13 @@ mod tests {
     #[test]
     fn sticker_with_a_price_element_but_no_price_fails_to_compile() {
         let engine = RenderEngine::warm_up("templates", "fonts").expect("warm_up should succeed");
-        let name = discovered(&engine, "Product Sticker Label").name.clone();
+        let name = discovered(&engine, "Product Sticker Label")
+            .file_path
+            .clone();
         let mut sample = sticker_sample();
         sample["labels"][0]["priceCents"] = serde_json::Value::Null;
 
-        let warned = engine.compile(
+        let warned = engine.compile_bundled(
             &name,
             crate::modules::render::repository::typst::json_to_dict(sample),
         );
@@ -597,8 +601,9 @@ mod tests {
     #[test]
     fn compile_once_matches_the_shared_engine_for_the_same_input() {
         let engine = RenderEngine::warm_up("templates", "fonts").expect("warm_up should succeed");
-        let name = discovered(&engine, "Product Sticker Label").name.clone();
-        let rel = engine.template_rel_path(&name).unwrap().to_string();
+        let rel = discovered(&engine, "Product Sticker Label")
+            .file_path
+            .clone();
 
         let warned = engine.compile_once(&rel, sticker_input());
         let doc = warned

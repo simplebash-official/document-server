@@ -45,25 +45,26 @@ fn json_to_value(value: serde_json::Value) -> Value {
     }
 }
 
-/// Compiles `template_name` (a `.typ` filename stem) against `input`, then
-/// exports the result to PDF bytes. Synchronous and CPU-bound — Typst
+/// Compiles the bundled template at `file_path` (relative to the templates
+/// root) against `input` through the shared engine, then exports the result
+/// to PDF bytes. Synchronous and CPU-bound — Typst
 /// compilation isn't async I/O — called directly from `render::service`'s
 /// async fn for Phase 1's expected "low-single-digit milliseconds once
 /// warm" render cost (see spec §9); move it onto `spawn_blocking` if a
 /// specific template later turns out to be CPU-heavy enough to matter.
-pub(crate) fn render_pdf(
+pub(crate) fn render_pdf_bundled(
     engine: &RenderEngine,
-    template_name: &str,
+    file_path: &str,
     input: serde_json::Value,
 ) -> Result<Vec<u8>, TypstEngineError> {
     let dict = json_to_dict(input);
-    export_pdf(engine.compile(template_name, dict), template_name)
+    export_pdf(engine.compile_bundled(file_path, dict), file_path)
 }
 
-/// Like `render_pdf`, but compiles `main_rel_path` through a single-use
-/// engine (`RenderEngine::compile_once`) — used when the render staged a
-/// downloaded image on disk and that file must not pollute the shared
-/// engine's file cache.
+/// Like `render_pdf_bundled`, but compiles `main_rel_path` through a
+/// single-use engine (`RenderEngine::compile_once`) — used for private
+/// packages and when the render staged a downloaded image on disk; neither
+/// may pollute the shared engine's file cache.
 pub(crate) fn render_pdf_once(
     engine: &RenderEngine,
     main_rel_path: &str,

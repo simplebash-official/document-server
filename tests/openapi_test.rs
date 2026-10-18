@@ -8,7 +8,6 @@
 
 use std::sync::Arc;
 
-use arc_swap::ArcSwap;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use document_server::{
@@ -42,7 +41,7 @@ async fn build_test_app() -> axum::Router {
     let state = AppState {
         config: Arc::new(config),
         db,
-        render: Arc::new(ArcSwap::from_pointee(render)),
+        render: Arc::new(render),
     };
     app::build_router(state)
 }
@@ -74,8 +73,13 @@ async fn openapi_json_lists_all_module_paths() {
         "/api/render",
         "/api/render/{templateKey}",
         "/api/templates",
-        "/api/templates/sync",
         "/api/templates/{key}",
+        "/api/packages",
+        "/api/packages/{name}",
+        "/api/packages/{name}/archive",
+        "/api/packages/{name}/preview",
+        "/api/packages/families/{family}/grants",
+        "/api/packages/families/{family}/retire",
         "/api/documents",
         "/api/documents/{key}",
         "/api/documents/{key}/pdf",
@@ -87,17 +91,18 @@ async fn openapi_json_lists_all_module_paths() {
         assert!(paths.contains_key(expected), "missing path: {expected}");
     }
 
-    // `/api/templates` carries both the open list (GET) and the
-    // internal-caller create (POST).
+    // Publishing is `POST /api/packages`; `/api/templates` is read-only.
     let templates_ops = paths["/api/templates"].as_object().unwrap();
     assert!(
         templates_ops.contains_key("get"),
         "GET /api/templates missing"
     );
     assert!(
-        templates_ops.contains_key("post"),
-        "POST /api/templates (create) missing from the spec"
+        !templates_ops.contains_key("post"),
+        "POST /api/templates was replaced by POST /api/packages"
     );
+    let packages_ops = paths["/api/packages"].as_object().unwrap();
+    assert!(packages_ops.contains_key("get") && packages_ops.contains_key("post"));
 }
 
 #[tokio::test]

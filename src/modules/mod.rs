@@ -5,6 +5,7 @@
 // each module's own `mod.rs` for its specific visibility rules.
 pub mod barcodes;
 pub mod documents;
+pub mod packages;
 pub mod qrcodes;
 pub mod render;
 pub mod template_data;

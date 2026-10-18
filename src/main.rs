@@ -8,8 +8,6 @@
 
 use std::sync::Arc;
 
-use arc_swap::ArcSwap;
-
 use document_server::{
     app, app::AppState, clients, clients::render::RenderEngine, core::config::Config,
     core::logging, modules::templates,
@@ -67,17 +65,15 @@ async fn main() {
     tracing::info!(
         category = "render",
         event = "warm_up",
-        templates = ?render.known_templates(),
+        templates = ?render.bundled().iter().map(|t| t.name.as_str()).collect::<Vec<_>>(),
         duration_ms = warm_up_started.elapsed().as_millis() as u64,
         "Render engine warmed up"
     );
 
-    // Best-effort in spirit (each upsert only ever touches `is_active`/
-    // `updated_at`, never clobbers hand-edited metadata — see
-    // `templates::repository::upsert_template_by_name`), but a database
-    // error here is still fatal: it means the connection just established
-    // above is already unusable, not a transient/ignorable condition.
-    templates::service::sync_templates_from_disk(&db, render.known_templates())
+    // A database error here is fatal: it means the connection just
+    // established above is already unusable, not a transient/ignorable
+    // condition.
+    templates::service::sync_bundled(&db, render.bundled())
         .await
         .unwrap_or_else(|err| {
             tracing::error!(%err, "failed to sync templates from disk");
@@ -87,7 +83,7 @@ async fn main() {
     let state = AppState {
         config: Arc::new(config),
         db,
-        render: Arc::new(ArcSwap::from_pointee(render)),
+        render: Arc::new(render),
     };
     let router = app::build_router(state);
 

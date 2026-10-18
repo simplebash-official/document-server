@@ -3,6 +3,7 @@
 
 pub mod barcodes;
 pub mod documents;
+pub mod packages;
 pub mod qrcodes;
 pub mod template_data;
 pub mod templates;

@@ -17,10 +17,19 @@ services:
       - RUST_LOG=document_server=info,tower_http=info,info
     volumes:
       - document_data:/app/data
+      # Published template packages (POST /api/packages) live under
+      # /app/templates/packages; they must survive a container recreate.
+      - document_packages:/app/templates/packages
       # Uncomment to mount templates/fonts for live editing without image rebuild
-      # (or mount an assemble-templates.sh output dir to use your own designs):
-      # - ./templates:/app/templates:ro
+      # (or mount an assemble-templates.sh output dir to use your own designs).
+      # Keep it read-only for documents/, labels/ and lib/ only: mount those
+      # three subfolders individually, not the whole templates/ directory,
+      # because packages/ above is a writable volume nested inside it.
+      # - ./templates/documents:/app/templates/documents:ro
+      # - ./templates/labels:/app/templates/labels:ro
+      # - ./templates/lib:/app/templates/lib:ro
       # - ./fonts:/app/fonts:ro
 
 volumes:
   document_data:
+  document_packages:

@@ -49,37 +49,100 @@ fn with_statement_logging(options: SqliteConnectOptions) -> SqliteConnectOptions
         )
 }
 
-async fn create_schema(pool: &SqlitePool) -> Result<(), sqlx::Error> {
-    sqlx::query(
-        "CREATE TABLE IF NOT EXISTS templates (
+const TEMPLATES_TABLE_SQL: &str = "CREATE TABLE IF NOT EXISTS templates (
             key TEXT PRIMARY KEY,
             name TEXT NOT NULL UNIQUE,
-            type TEXT NOT NULL DEFAULT 'document',
-            description TEXT NOT NULL DEFAULT '',
-            data_schema TEXT,
-            sample_data TEXT,
-            is_active INTEGER NOT NULL,
+            family TEXT NOT NULL,
+            version INTEGER NOT NULL,
+            type TEXT NOT NULL CHECK (type IN ('document', 'label')),
+            kind TEXT NOT NULL,
+            description TEXT NOT NULL,
+            data_schema TEXT NOT NULL,
+            sample_data TEXT NOT NULL,
+            status TEXT NOT NULL CHECK (status IN ('published', 'retired')),
+            scope TEXT NOT NULL CHECK (scope IN ('global', 'private')),
+            file_path TEXT NOT NULL,
+            sha256 TEXT NOT NULL,
+            min_app_version TEXT,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
-        )",
+        )";
+
+/// Whether `templates` still has the shape that predates template packages
+/// (its `is_active` column is the marker).
+async fn templates_table_is_pre_packages(pool: &SqlitePool) -> Result<bool, sqlx::Error> {
+    let marker: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM pragma_table_info('templates') WHERE name = 'is_active'",
+    )
+    .fetch_one(pool)
+    .await?;
+    Ok(marker > 0)
+}
+
+/// One-time rebuild of the pre-packages `templates` table: every existing row
+/// is a bundled (global) template that is its own one-version family;
+/// `is_active` becomes `status`. `kind`, `sha256` and `file_path` of the
+/// bundled rows are refreshed from disk by the boot sync right after.
+async fn migrate_templates_to_packages(pool: &SqlitePool) -> Result<(), sqlx::Error> {
+    let mut tx = pool.begin().await?;
+    // `AssertSqlSafe` is justified: the statement is a compile-time constant
+    // with one fixed table-name substitution, no runtime input.
+    sqlx::query(sqlx::AssertSqlSafe(
+        TEMPLATES_TABLE_SQL.replace("IF NOT EXISTS templates", "templates_packages"),
+    ))
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query(
+        "INSERT INTO templates_packages
+            (key, name, family, version, type, kind, description, data_schema, sample_data,
+             status, scope, file_path, sha256, min_app_version, created_at, updated_at)
+         SELECT key, name, name, 1, type,
+                COALESCE(json_extract(data_schema, '$.\"x-document-kind\"'), ''),
+                description, COALESCE(data_schema, '{}'), COALESCE(sample_data, '{}'),
+                CASE is_active WHEN 1 THEN 'published' ELSE 'retired' END,
+                'global',
+                CASE type WHEN 'label' THEN 'labels/' ELSE 'documents/' END || name || '.typ',
+                '', NULL, created_at, updated_at
+         FROM templates",
+    )
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query("DROP TABLE templates")
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query("ALTER TABLE templates_packages RENAME TO templates")
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await
+}
+
+async fn create_schema(pool: &SqlitePool) -> Result<(), sqlx::Error> {
+    // A database created before template packages carries the old shape
+    // (`is_active`, no family/version/scope); rebuild it into the current one
+    // before anything else touches the table.
+    if templates_table_is_pre_packages(pool).await? {
+        migrate_templates_to_packages(pool).await?;
+    }
+
+    sqlx::query(TEMPLATES_TABLE_SQL).execute(pool).await?;
+
+    sqlx::query(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_templates_family_version
+         ON templates (family, version)",
     )
     .execute(pool)
     .await?;
 
-    // In case an existing database created before the `type` column was added is being reused
-    let _ = sqlx::query("ALTER TABLE templates ADD COLUMN type TEXT NOT NULL DEFAULT 'document'")
-        .execute(pool)
-        .await;
-
-    // Same additive pattern as `type` above. `data_schema` predates this and
-    // historically held whatever `<name>.json` sidecar contained (sample
-    // data) under a misleading name; from the schema-sidecar feature onward
-    // it holds the real `<name>.schema.json` contract instead, and samples
-    // move to their own honestly-named column. The next disk sync rewrites
-    // both columns, so an old database self-corrects on first boot.
-    let _ = sqlx::query("ALTER TABLE templates ADD COLUMN sample_data TEXT")
-        .execute(pool)
-        .await;
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS template_grants (
+            family TEXT NOT NULL,
+            tenant_key TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY (family, tenant_key)
+        )",
+    )
+    .execute(pool)
+    .await?;
 
     sqlx::query(
         "CREATE TABLE IF NOT EXISTS documents (

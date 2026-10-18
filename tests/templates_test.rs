@@ -1,7 +1,7 @@
 // Full-stack, real SQLite (throwaway per-test file via `common::spawn_app`).
-// Covers the real `GET /api/templates` / `GET /api/templates/{key}` read
-// routes with template type categorization (documents vs labels) and
-// expected `data` sub-objects.
+// Covers `GET /api/templates` / `GET /api/templates/{key}`: what each tenant
+// sees, and the contract guards over the bundled schemas. Publishing and
+// granting templates is covered in `packages_test.rs`.
 
 mod common;
 
@@ -9,31 +9,38 @@ use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use tower::ServiceExt;
 
-#[tokio::test]
-async fn list_templates_returns_every_seeded_template_with_type_and_expected_data() {
-    let app = common::spawn_app().await;
-
+async fn get(
+    app: &common::TestApp,
+    uri: &str,
+    tenant: Option<&str>,
+) -> (StatusCode, serde_json::Value) {
+    let mut request = Request::builder()
+        .uri(uri)
+        .header("X-Internal-Api-Key", &app.config.internal_api_key);
+    if let Some(tenant) = tenant {
+        request = request.header("X-Tenant-Key", tenant);
+    }
     let response = app
         .router
-        .oneshot(
-            Request::builder()
-                .uri("/api/templates")
-                .body(Body::empty())
-                .unwrap(),
-        )
+        .clone()
+        .oneshot(request.body(Body::empty()).unwrap())
         .await
         .unwrap();
+    let status = response.status();
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    (status, serde_json::from_slice(&body).unwrap_or_default())
+}
 
-    assert_eq!(response.status(), StatusCode::OK);
-    let json: serde_json::Value = serde_json::from_slice(
-        &axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap(),
-    )
-    .unwrap();
+#[tokio::test]
+async fn list_templates_returns_every_bundled_template_with_type_and_expected_data() {
+    let app = common::spawn_app().await;
+    let (status, json) = get(&app, "/api/templates", None).await;
+    assert_eq!(status, StatusCode::OK);
 
     let templates = json["data"]["templates"].as_array().unwrap();
-    // Names are opaque generated ids now (`doc_temp_…` / `lbl_temp_…`); a
+    // Names are opaque generated ids (`doc_temp_…` / `lbl_temp_…`); a
     // template is identified by its `description` (the schema `title`).
     let mut descriptions: Vec<&str> = templates
         .iter()
@@ -52,11 +59,19 @@ async fn list_templates_returns_every_seeded_template_with_type_and_expected_dat
             "Thermal Receipt",
         ]
     );
-    assert!(templates.iter().all(|t| t["isActive"] == true));
+    assert!(templates.iter().all(|t| t["status"] == "published"));
+    assert!(templates.iter().all(|t| t["scope"] == "global"));
+    assert!(templates.iter().all(|t| t["version"] == 1));
+    assert!(templates.iter().all(|t| t["family"] == t["name"]));
     assert!(templates.iter().all(|t| {
         let name = t["name"].as_str().unwrap();
         name.starts_with("doc_temp_") || name.starts_with("lbl_temp_")
     }));
+    assert!(
+        templates
+            .iter()
+            .all(|t| t["options"].as_array().unwrap().is_empty())
+    );
 
     let by_desc = |d: &str| -> serde_json::Value {
         templates
@@ -68,6 +83,9 @@ async fn list_templates_returns_every_seeded_template_with_type_and_expected_dat
 
     let invoice_tpl = by_desc("A4 Invoice");
     assert_eq!(invoice_tpl["type"], "document");
+    assert_eq!(invoice_tpl["kind"], "a4-invoice");
+    assert_eq!(invoice_tpl["isDefault"], true);
+    assert_eq!(by_desc("A4 Invoice Modern")["isDefault"], false);
     assert_eq!(invoice_tpl["data"]["invoiceNumber"], "INV-000123");
     assert!(invoice_tpl["data"]["items"].is_array());
     assert_eq!(invoice_tpl["data"]["totalCents"], 1100000);
@@ -92,6 +110,7 @@ async fn list_templates_returns_every_seeded_template_with_type_and_expected_dat
 
     let sticker_tpl = by_desc("Product Sticker Label");
     assert_eq!(sticker_tpl["type"], "label");
+    assert_eq!(sticker_tpl["kind"], "product-label");
     assert_eq!(sticker_tpl["data"]["shopName"], "SimpleBash Mobile");
     assert_eq!(sticker_tpl["data"]["widthMm"], 50);
     let required = sticker_tpl["dataSchema"]["required"].as_array().unwrap();
@@ -104,67 +123,14 @@ async fn list_templates_returns_every_seeded_template_with_type_and_expected_dat
 async fn list_templates_filters_by_type() {
     let app = common::spawn_app().await;
 
-    // Filter by type=document
-    let response = app
-        .router
-        .clone()
-        .oneshot(
-            Request::builder()
-                .uri("/api/templates?type=document")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), StatusCode::OK);
-    let json: serde_json::Value = serde_json::from_slice(
-        &axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap(),
-    )
-    .unwrap();
-
+    let (status, json) = get(&app, "/api/templates?type=document", None).await;
+    assert_eq!(status, StatusCode::OK);
     let templates = json["data"]["templates"].as_array().unwrap();
     assert_eq!(templates.len(), 6);
     assert!(templates.iter().all(|t| t["type"] == "document"));
-    let mut descriptions: Vec<&str> = templates
-        .iter()
-        .map(|t| t["description"].as_str().unwrap())
-        .collect();
-    descriptions.sort_unstable();
-    assert_eq!(
-        descriptions,
-        vec![
-            "A4 Invoice",
-            "A4 Invoice Modern",
-            "Analytics Report",
-            "Credit Note",
-            "Quotation",
-            "Thermal Receipt"
-        ]
-    );
 
-    // Filter by type=label
-    let response = app
-        .router
-        .oneshot(
-            Request::builder()
-                .uri("/api/templates?type=label")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), StatusCode::OK);
-    let json: serde_json::Value = serde_json::from_slice(
-        &axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap(),
-    )
-    .unwrap();
-
+    let (status, json) = get(&app, "/api/templates?type=label", None).await;
+    assert_eq!(status, StatusCode::OK);
     let templates = json["data"]["templates"].as_array().unwrap();
     assert_eq!(templates.len(), 1);
     assert_eq!(templates[0]["description"], "Product Sticker Label");
@@ -175,7 +141,27 @@ async fn list_templates_filters_by_type() {
             .starts_with("lbl_temp_")
     );
     assert_eq!(templates[0]["type"], "label");
-    assert_eq!(templates[0]["data"]["shopName"], "SimpleBash Mobile");
+}
+
+#[tokio::test]
+async fn an_unknown_type_filter_is_rejected_not_ignored() {
+    let app = common::spawn_app().await;
+    let (status, _) = get(&app, "/api/templates?type=poster", None).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn templates_require_the_internal_api_key() {
+    let app = common::spawn_app().await;
+    for uri in ["/api/templates", "/api/templates/tpl_x"] {
+        let response = app
+            .router
+            .clone()
+            .oneshot(Request::builder().uri(uri).body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED, "{uri}");
+    }
 }
 
 #[tokio::test]
@@ -188,25 +174,8 @@ async fn get_template_by_key_returns_that_template_with_data() {
         .await
         .expect("sticker template should be synced from disk by spawn_app");
 
-    let response = app
-        .router
-        .oneshot(
-            Request::builder()
-                .uri(format!("/api/templates/{sticker_key}"))
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), StatusCode::OK);
-    let json: serde_json::Value = serde_json::from_slice(
-        &axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap(),
-    )
-    .unwrap();
-
+    let (status, json) = get(&app, &format!("/api/templates/{sticker_key}"), None).await;
+    assert_eq!(status, StatusCode::OK);
     assert_eq!(json["data"]["key"], sticker_key);
     assert_eq!(json["data"]["description"], "Product Sticker Label");
     assert!(
@@ -226,416 +195,39 @@ async fn get_template_by_key_returns_that_template_with_data() {
 #[tokio::test]
 async fn get_template_unknown_key_returns_404() {
     let app = common::spawn_app().await;
-
-    let response = app
-        .router
-        .oneshot(
-            Request::builder()
-                .uri("/api/templates/tpl_does_not_exist")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), StatusCode::NOT_FOUND);
-    let json: serde_json::Value = serde_json::from_slice(
-        &axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap(),
-    )
-    .unwrap();
+    let (status, json) = get(&app, "/api/templates/tpl_does_not_exist", None).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
     assert_eq!(json["code"], "TEMPLATE_NOT_FOUND");
 }
 
-// ============================================================================
-// Sync
-// ============================================================================
-
-fn post_sync_request() -> axum::http::Request<axum::body::Body> {
-    Request::builder()
-        .method("POST")
-        .uri("/api/templates/sync")
-        .body(Body::empty())
-        .unwrap()
-}
-
 #[tokio::test]
-async fn sync_templates_requires_internal_api_key() {
+async fn a_retired_bundled_template_is_hidden_from_lists_and_lookups() {
     let app = common::spawn_app().await;
-
-    let response = app.router.oneshot(post_sync_request()).await.unwrap();
-    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
-}
-
-// A row whose `.typ` no longer exists on disk gets deactivated (never
-// deleted) by the sync pass; everything still on disk stays active.
-#[tokio::test]
-async fn sync_deactivates_templates_removed_from_disk() {
-    let app = common::spawn_app().await;
-
-    sqlx::query(
-        "INSERT INTO templates (key, name, type, description, data_schema, sample_data, is_active, created_at, updated_at)
-         VALUES ('tpl_ghost', 'ghost-template', 'document', '', NULL, NULL, 1, datetime('now'), datetime('now'))",
-    )
-    .execute(&app.db)
-    .await
-    .expect("seed a stale template row");
-
-    let response = app
-        .router
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/api/templates/sync")
-                .header("X-Internal-Api-Key", &app.config.internal_api_key)
-                .body(Body::empty())
-                .unwrap(),
-        )
+    let (key, name): (String, String) =
+        sqlx::query_as("SELECT key, name FROM templates WHERE description = 'Quotation'")
+            .fetch_one(&app.db)
+            .await
+            .unwrap();
+    sqlx::query("UPDATE templates SET status = 'retired' WHERE key = ?")
+        .bind(&key)
+        .execute(&app.db)
         .await
         .unwrap();
 
-    assert_eq!(response.status(), StatusCode::OK);
-    let json: serde_json::Value = serde_json::from_slice(
-        &axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap(),
-    )
-    .unwrap();
-    assert_eq!(json["data"]["syncedCount"], 7);
-    assert_eq!(json["data"]["deactivatedCount"], 1);
-    let names: Vec<&str> = json["data"]["templates"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|v| v.as_str().unwrap())
-        .collect();
-    assert_eq!(names.len(), 7);
+    let (_, json) = get(&app, "/api/templates", None).await;
     assert!(
-        names
+        json["data"]["templates"]
+            .as_array()
+            .unwrap()
             .iter()
-            .all(|n| n.starts_with("doc_temp_") || n.starts_with("lbl_temp_"))
+            .all(|t| t["name"] != name.as_str())
     );
-
-    // The ghost is deactivated but its row survives; real templates stay active.
-    let ghost_active: bool =
-        sqlx::query_scalar("SELECT is_active FROM templates WHERE key = 'tpl_ghost'")
-            .fetch_one(&app.db)
-            .await
-            .unwrap();
-    assert!(!ghost_active);
-    let active_count: i64 =
-        sqlx::query_scalar("SELECT COUNT(*) FROM templates WHERE is_active = 1")
-            .fetch_one(&app.db)
-            .await
-            .unwrap();
-    assert_eq!(active_count, 7);
-}
-
-// The point of the sync endpoint: a `.typ` dropped into the templates dir
-// becomes renderable without restarting the process, and removing it again
-// deactivates it.
-#[tokio::test]
-async fn sync_picks_up_new_template_and_renders_it_without_restart() {
-    let templates_root = tempfile::tempdir().expect("create temp templates root");
-    common::copy_dir_recursive(std::path::Path::new("templates"), templates_root.path())
-        .expect("copy seed templates into temp dir");
-
-    let app = common::spawn_app_with_templates_dir(
-        templates_root.path().to_str().expect("utf-8 temp path"),
-    )
-    .await;
-
-    std::fs::write(
-        templates_root.path().join("documents/hot-add.typ"),
-        "= Hot Add\n\nAdded while the server was running.\n",
-    )
-    .expect("write new template file");
-
-    let response = app
-        .router
-        .clone()
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/api/templates/sync")
-                .header("X-Internal-Api-Key", &app.config.internal_api_key)
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let json: serde_json::Value = serde_json::from_slice(
-        &axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap(),
-    )
-    .unwrap();
-    assert_eq!(json["data"]["syncedCount"], 8);
-
-    let hot_key: String = sqlx::query_scalar("SELECT key FROM templates WHERE name = 'hot-add'")
-        .fetch_one(&app.db)
-        .await
-        .expect("hot-add should be synced");
-
-    // No schema sidecar → `{}` renders fine: validation only applies when a
-    // template ships one.
-    let response = app
-        .router
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri(format!("/api/render/{hot_key}"))
-                .header("content-type", "application/json")
-                .header("X-Internal-Api-Key", &app.config.internal_api_key)
-                .body(Body::from("{}"))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let pdf_bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
-        .await
-        .unwrap();
-    assert!(pdf_bytes.starts_with(b"%PDF-"));
-
-    // Removing the file and re-syncing deactivates it — future renders 404.
-    std::fs::remove_file(templates_root.path().join("documents/hot-add.typ"))
-        .expect("remove new template file");
-    let response = app
-        .router
-        .clone()
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri("/api/templates/sync")
-                .header("X-Internal-Api-Key", &app.config.internal_api_key)
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-
-    let response = app
-        .router
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri(format!("/api/render/{hot_key}"))
-                .header("content-type", "application/json")
-                .header("X-Internal-Api-Key", &app.config.internal_api_key)
-                .body(Body::from("{}"))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::NOT_FOUND);
-}
-
-// ============================================================================
-// Create (`POST /api/templates`)
-// ============================================================================
-
-/// A `TestApp` whose templates dir is a writable copy of the seed tree, so
-/// `POST /api/templates` can drop files without touching this repo.
-async fn spawn_with_writable_templates() -> (common::TestApp, tempfile::TempDir) {
-    let root = tempfile::tempdir().expect("create temp templates root");
-    common::copy_dir_recursive(std::path::Path::new("templates"), root.path())
-        .expect("copy seed templates into temp dir");
-    let app =
-        common::spawn_app_with_templates_dir(root.path().to_str().expect("utf-8 temp path")).await;
-    (app, root)
-}
-
-fn post_create(api_key: Option<&str>, body: serde_json::Value) -> Request<Body> {
-    let mut builder = Request::builder()
-        .method("POST")
-        .uri("/api/templates")
-        .header("content-type", "application/json");
-    if let Some(key) = api_key {
-        builder = builder.header("X-Internal-Api-Key", key);
-    }
-    builder.body(Body::from(body.to_string())).unwrap()
-}
-
-async fn body_json(response: axum::response::Response) -> serde_json::Value {
-    serde_json::from_slice(
-        &axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap(),
-    )
-    .unwrap()
-}
-
-#[tokio::test]
-async fn create_template_requires_internal_api_key() {
-    let (app, _root) = spawn_with_writable_templates().await;
-    let response = app
-        .router
-        .oneshot(post_create(None, serde_json::json!({"source": "= Hi"})))
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
-}
-
-#[tokio::test]
-async fn create_template_writes_a_document_and_renders_it() {
-    let (app, root) = spawn_with_writable_templates().await;
-
-    let source = "#let data = sys.inputs\n= Invoice #data.at(\"ref\", default: \"\")\n";
-    let response = app
-        .router
-        .clone()
-        .oneshot(post_create(
-            Some(&app.config.internal_api_key),
-            serde_json::json!({
-                "type": "document",
-                "source": source,
-                "schema": {
-                    "$schema": "http://json-schema.org/draft-07/schema#",
-                    "title": "Custom Report",
-                    "type": "object",
-                    "additionalProperties": true,
-                    "required": ["ref"],
-                    "properties": { "ref": { "type": "string" } }
-                },
-                "sample": { "ref": "R-1" }
-            }),
-        ))
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::CREATED);
-    let json = body_json(response).await;
-    let key = json["data"]["key"].as_str().unwrap().to_string();
-    let name = json["data"]["name"].as_str().unwrap().to_string();
-    assert!(name.starts_with("doc_temp_"), "got name {name}");
-    assert_eq!(json["data"]["description"], "Custom Report");
-    assert_eq!(json["data"]["isActive"], true);
-
-    // Files landed in documents/.
-    assert!(root.path().join(format!("documents/{name}.typ")).exists());
-    assert!(
-        root.path()
-            .join(format!("documents/{name}.schema.json"))
-            .exists()
-    );
-
-    // And it renders on the very next request — no restart.
-    let response = app
-        .router
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri(format!("/api/render/{key}"))
-                .header("content-type", "application/json")
-                .header("X-Internal-Api-Key", &app.config.internal_api_key)
-                .body(Body::from(serde_json::json!({"ref": "R-9"}).to_string()))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
-    let pdf = axum::body::to_bytes(response.into_body(), usize::MAX)
-        .await
-        .unwrap();
-    assert!(pdf.starts_with(b"%PDF-"));
-}
-
-#[tokio::test]
-async fn create_template_writes_a_label() {
-    let (app, root) = spawn_with_writable_templates().await;
-    let response = app
-        .router
-        .oneshot(post_create(
-            Some(&app.config.internal_api_key),
-            serde_json::json!({ "type": "label", "source": "= Label\n" }),
-        ))
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::CREATED);
-    let json = body_json(response).await;
-    let name = json["data"]["name"].as_str().unwrap().to_string();
-    assert!(name.starts_with("lbl_temp_"), "got name {name}");
-    assert_eq!(json["data"]["type"], "label");
-    assert!(root.path().join(format!("labels/{name}.typ")).exists());
-}
-
-#[tokio::test]
-async fn create_template_rejects_empty_source() {
-    let (app, _root) = spawn_with_writable_templates().await;
-    let response = app
-        .router
-        .oneshot(post_create(
-            Some(&app.config.internal_api_key),
-            serde_json::json!({ "source": "   " }),
-        ))
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
-    assert_eq!(body_json(response).await["code"], "TEMPLATE_CREATE_FAILED");
-}
-
-#[tokio::test]
-async fn create_template_rejects_invalid_schema() {
-    let (app, _root) = spawn_with_writable_templates().await;
-    let response = app
-        .router
-        .oneshot(post_create(
-            Some(&app.config.internal_api_key),
-            serde_json::json!({
-                "source": "= Hi\n",
-                "schema": { "type": "not-a-real-type" }
-            }),
-        ))
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
-    assert_eq!(body_json(response).await["code"], "TEMPLATE_CREATE_FAILED");
-}
-
-#[tokio::test]
-async fn create_template_that_fails_to_compile_is_rejected_and_rolled_back() {
-    let (app, root) = spawn_with_writable_templates().await;
-    let before: Vec<_> = std::fs::read_dir(root.path().join("documents"))
-        .unwrap()
-        .filter_map(Result::ok)
-        .map(|e| e.file_name())
-        .collect();
-
-    let response = app
-        .router
-        .oneshot(post_create(
-            Some(&app.config.internal_api_key),
-            serde_json::json!({
-                "source": "#let x = ( // unterminated\n",
-                "sample": {}
-            }),
-        ))
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
-    assert_eq!(body_json(response).await["code"], "TEMPLATE_CREATE_FAILED");
-
-    // Nothing new left behind on disk.
-    let after: Vec<_> = std::fs::read_dir(root.path().join("documents"))
-        .unwrap()
-        .filter_map(Result::ok)
-        .map(|e| e.file_name())
-        .collect();
-    assert_eq!(
-        before.len(),
-        after.len(),
-        "rolled-back files should be gone"
-    );
+    let (status, _) = get(&app, &format!("/api/templates/{key}"), None).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
 }
 
 // The backend feeds both A4 designs from one payload builder, so their input
-// contracts must stay identical — only the human `title`/`description` differ.
+// contracts must stay identical — only the human `title`/`description` (and which one is the default) differ.
 #[test]
 fn a4_invoice_modern_schema_matches_a4_invoice_schema() {
     let load = |name: &str| -> serde_json::Value {
@@ -645,6 +237,7 @@ fn a4_invoice_modern_schema_matches_a4_invoice_schema() {
         let obj = schema.as_object_mut().unwrap();
         obj.remove("title");
         obj.remove("description");
+        obj.remove("x-default");
         schema
     };
     assert_eq!(
@@ -687,17 +280,25 @@ fn schema_sidecars() -> Vec<(
 }
 
 #[test]
-fn every_document_schema_declares_its_document_kind() {
-    for (subdir, stem, schema, _) in schema_sidecars() {
-        if subdir != "documents" {
-            continue;
+fn every_bundled_schema_passes_the_template_schema_rules() {
+    for (_, stem, schema, _) in schema_sidecars() {
+        document_server::domain::templates::validate_template_schema(&schema)
+            .unwrap_or_else(|err| panic!("{stem}.schema.json: {err}"));
+    }
+}
+
+#[test]
+fn every_kind_has_exactly_one_default_template() {
+    let mut defaults: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
+    for (_, _, schema, _) in schema_sidecars() {
+        let kind = schema["x-document-kind"].as_str().unwrap().to_string();
+        let entry = defaults.entry(kind).or_insert(0);
+        if schema["x-default"] == true {
+            *entry += 1;
         }
-        let kind = schema["x-document-kind"].as_str().unwrap_or_default();
-        assert!(
-            !kind.is_empty(),
-            "{stem}.schema.json needs a non-empty \"x-document-kind\" (e.g. \"a4-invoice\"); \
-             the POS dropdowns list templates by it"
-        );
+    }
+    for (kind, count) in defaults {
+        assert_eq!(count, 1, "kind {kind} needs exactly one x-default template");
     }
 }
 
@@ -715,7 +316,9 @@ fn template_titles_are_unique() {
 #[test]
 fn every_sample_validates_against_its_own_schema() {
     for (_, stem, schema, sample) in schema_sidecars() {
-        let Some(sample) = sample else { continue };
+        let Some(sample) = sample else {
+            panic!("{stem} has no .json sample")
+        };
         let validator = jsonschema::validator_for(&schema).expect("schema compiles");
         let errors: Vec<String> = validator
             .iter_errors(&sample)

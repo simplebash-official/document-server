@@ -1,253 +1,196 @@
-// Business rules for the templates feature: resolving a template by key for
-// rendering, and keeping the `templates` table in step with whatever
-// `.typ` files are actually on disk. Delegates all SQLite access to
-// `super::repository`.
-
-use std::path::{Path, PathBuf};
+// Business rules for the templates feature: which templates a tenant may
+// see, render or reprint, keeping the bundled (global) templates in step with
+// the shipped files, and the write operations the packages module builds on.
+// Delegates all SQLite access to `super::repository`.
 
 use sqlx::SqlitePool;
 
 use crate::{
-    clients::render::{DiscoveredTemplate, RenderEngine},
+    clients::render::BundledTemplate,
     core::{
-        config::Config,
         constants::{codes, prefixes},
         error::{AppError, AppResult},
-        id::generate_template_name,
+        id::generate_id,
     },
-    domain::templates::{
-        CreateTemplateRequest, SyncTemplatesResponse, Template, TemplateType, TemplatesResponse,
-    },
-    modules::{render, templates::repository},
+    domain::templates::{Template, TemplateScope, TemplateType, TemplatesResponse},
+    modules::templates::{model::TemplateRow, repository},
 };
 
-/// Every known template, optionally filtered by `type` — backs `GET /api/templates`.
-/// Returns inactive templates too; `render`'s `get_active_template_by_key` is the
-/// one place that filters on `is_active`.
+fn not_found() -> AppError {
+    AppError::not_found_with_code("Template not found", codes::TEMPLATE_NOT_FOUND)
+}
+
+pub(crate) fn into_template(row: TemplateRow) -> AppResult<Template> {
+    row.try_into_template()
+        .map_err(|err| AppError::internal(format!("template row is corrupt: {err}")))
+}
+
+/// The latest published version of every family `tenant_key` may render,
+/// optionally filtered by type — backs `GET /api/templates`.
 pub(crate) async fn list_templates(
     db: &SqlitePool,
+    tenant_key: &str,
     type_filter: Option<TemplateType>,
 ) -> AppResult<TemplatesResponse> {
-    let rows = repository::list_templates(db, type_filter).await?;
-    Ok(TemplatesResponse {
-        templates: rows.into_iter().map(|row| row.into_template()).collect(),
-    })
+    let type_filter = type_filter.map(|t| t.to_string());
+    let rows = repository::list_renderable_latest(db, tenant_key, type_filter.as_deref()).await?;
+    let templates = rows
+        .into_iter()
+        .map(into_template)
+        .collect::<AppResult<Vec<_>>>()?;
+    Ok(TemplatesResponse { templates })
 }
 
-/// Fetch by `key` for `GET /api/templates/{key}` — 404s with
-/// `TEMPLATE_NOT_FOUND` if missing, but does not filter on `is_active`.
-pub(crate) async fn get_template_by_key(db: &SqlitePool, key: &str) -> AppResult<Template> {
-    let row = repository::find_template_by_key(db, key)
-        .await?
-        .ok_or_else(|| {
-            AppError::not_found_with_code("Template not found", codes::TEMPLATE_NOT_FOUND)
-        })?;
-
-    Ok(row.into_template())
-}
-
-/// Fetch by *name* for callers that resolve templates the way rendering
-/// does (`.typ` stem, e.g. stored template data scoping). Not active-filtered.
-pub(crate) async fn get_template_by_name(db: &SqlitePool, name: &str) -> AppResult<Template> {
-    let row = repository::find_template_by_name(db, name)
-        .await?
-        .ok_or_else(|| {
-            AppError::not_found_with_code("Template not found", codes::TEMPLATE_NOT_FOUND)
-        })?;
-
-    Ok(row.into_template())
-}
-
-/// Fetch by `key`, 404ing with `TEMPLATE_NOT_FOUND` if missing *or*
-/// inactive.
-pub(crate) async fn get_active_template_by_key(db: &SqlitePool, key: &str) -> AppResult<Template> {
-    let row = repository::find_template_by_key(db, key)
-        .await?
-        .filter(|row| row.is_active)
-        .ok_or_else(|| {
-            AppError::not_found_with_code("Template not found", codes::TEMPLATE_NOT_FOUND)
-        })?;
-
-    Ok(row.into_template())
-}
-
-/// Upserts one `templates` row per discovered template in `known_templates`,
-/// marking each active. Each row carries both the machine-readable input
-/// contract (`data_schema`, from the `<name>.schema.json` sidecar) and the
-/// sample data (`sample_data`, from `<name>.json`) — the sync pass is what
-/// migrates an old database's misnamed sample-only `data_schema` column to
-/// the split layout.
-pub async fn sync_templates_from_disk(
+/// Backs `GET /api/templates/{key}` — 404 unless the tenant may render it.
+pub(crate) async fn get_template_by_key(
     db: &SqlitePool,
-    known_templates: &[DiscoveredTemplate],
-) -> AppResult<()> {
-    for tpl in known_templates {
-        repository::upsert_template_by_name(
-            db,
-            &tpl.name,
-            tpl.template_type,
-            tpl.description.as_deref(),
-            tpl.data_schema.as_ref(),
-            tpl.sample_data.as_ref(),
-            true,
-        )
-        .await?;
-    }
-    Ok(())
+    tenant_key: &str,
+    key: &str,
+) -> AppResult<Template> {
+    into_template(resolve_renderable(db, tenant_key, key).await?)
 }
 
-/// Backs `POST /api/templates`: writes a new template (and its optional
-/// sidecars) to disk under a freshly minted `<type>_temp_<nanoid>` identity,
-/// then re-runs the disk sync so the row is upserted and the engine rebuilt.
-/// Returns the fresh engine (the route swaps it in) and the created row.
-///
-/// Anything that goes wrong after the files are written rolls them back —
-/// a failed create must not leave a half-published template on disk or a
-/// dangling row.
-pub(crate) async fn create_template(
+/// The published template `key` if `tenant_key` may render it, else 404.
+/// A template that exists but is not visible to the tenant is
+/// indistinguishable from one that does not exist.
+pub(crate) async fn resolve_renderable(
     db: &SqlitePool,
-    cfg: &Config,
-    req: CreateTemplateRequest,
-) -> AppResult<(RenderEngine, Template)> {
-    if req.source.trim().is_empty() {
-        return Err(AppError::unprocessable_entity(
-            codes::TEMPLATE_CREATE_FAILED,
-            "template source must not be empty",
-        ));
-    }
-
-    if let Some(schema) = &req.schema
-        && let Err(err) = jsonschema::validator_for(schema)
-    {
-        return Err(AppError::unprocessable_entity(
-            codes::TEMPLATE_CREATE_FAILED,
-            format!("schema is not a valid JSON Schema: {err}"),
-        ));
-    }
-
-    let (subdir, prefix) = match req.r#type {
-        TemplateType::Label => ("labels", prefixes::TEMPLATE_NAME_LABEL),
-        TemplateType::Document => ("documents", prefixes::TEMPLATE_NAME_DOCUMENT),
-    };
-    let name = generate_template_name(prefix);
-    let dir = Path::new(&cfg.templates_dir).join(subdir);
-
-    tokio::fs::create_dir_all(&dir)
-        .await
-        .map_err(|err| AppError::internal(format!("could not create {subdir}/: {err}")))?;
-    write_template_files(&dir, &name, &req)
-        .await
-        .map_err(|err| AppError::internal(format!("could not write template files: {err}")))?;
-
-    // From here on, any failure must delete what we just wrote.
-    let built = async {
-        let (engine, _) = resync_from_disk(db, &cfg.templates_dir, &cfg.fonts_dir).await?;
-
-        if !engine.known_templates().iter().any(|t| t.name == name) {
-            return Err(AppError::unprocessable_entity(
-                codes::TEMPLATE_CREATE_FAILED,
-                "template was written but the render engine did not pick it up",
-            ));
-        }
-
-        // Smoke-compile against the sample when one was supplied. Remote
-        // image fetching is forced off here — a create should not depend on
-        // an external URL being reachable.
-        if let Some(sample) = req.sample.clone() {
-            let smoke_cfg = Config {
-                remote_image_fetch_enabled: false,
-                ..cfg.clone()
-            };
-            render::service::compile_pdf(&engine, &smoke_cfg, &name, req.schema.as_ref(), sample)
-                .await
-                .map_err(|err| {
-                    AppError::unprocessable_entity(
-                        codes::TEMPLATE_CREATE_FAILED,
-                        format!("template does not compile against its sample: {err}"),
-                    )
-                })?;
-        }
-
-        let row = repository::find_template_by_name(db, &name)
-            .await?
-            .ok_or_else(|| AppError::internal("created template row vanished immediately"))?;
-        Ok((engine, row.into_template()))
-    }
-    .await;
-
-    match built {
-        Ok(result) => Ok(result),
-        Err(err) => {
-            remove_template_files(&dir, &name).await;
-            // Best-effort: bring the engine/DB back to the pre-create state.
-            let _ = resync_from_disk(db, &cfg.templates_dir, &cfg.fonts_dir).await;
-            Err(err)
-        }
-    }
+    tenant_key: &str,
+    key: &str,
+) -> AppResult<TemplateRow> {
+    repository::find_renderable_by_key(db, tenant_key, key)
+        .await?
+        .ok_or_else(not_found)
 }
 
-async fn write_template_files(
-    dir: &Path,
+/// The template `key` for reprinting a document of `tenant_key` — status is
+/// ignored (a retired design still reprints), visibility is not.
+pub(crate) async fn resolve_reprintable(
+    db: &SqlitePool,
+    tenant_key: &str,
+    key: &str,
+) -> AppResult<TemplateRow> {
+    repository::find_reprintable_by_key(db, tenant_key, key)
+        .await?
+        .ok_or_else(not_found)
+}
+
+/// The template called `name` if `tenant_key` may use it (any status), else
+/// 404 — scopes tenant data that is keyed by template name.
+pub(crate) async fn ensure_usable_by(
+    db: &SqlitePool,
+    tenant_key: &str,
     name: &str,
-    req: &CreateTemplateRequest,
-) -> std::io::Result<()> {
-    tokio::fs::write(dir.join(format!("{name}.typ")), &req.source).await?;
-    if let Some(schema) = &req.schema {
-        let pretty = serde_json::to_vec_pretty(schema).unwrap_or_default();
-        tokio::fs::write(dir.join(format!("{name}.schema.json")), pretty).await?;
+) -> AppResult<TemplateRow> {
+    let row = repository::find_by_name(db, name)
+        .await?
+        .ok_or_else(not_found)?;
+    let scope = row
+        .scope()
+        .map_err(|err| AppError::internal(format!("template row is corrupt: {err}")))?;
+    if scope == TemplateScope::Private
+        && !repository::is_granted(db, &row.family, tenant_key).await?
+    {
+        return Err(not_found());
     }
-    if let Some(sample) = &req.sample {
-        let pretty = serde_json::to_vec_pretty(sample).unwrap_or_default();
-        tokio::fs::write(dir.join(format!("{name}.json")), pretty).await?;
+    Ok(row)
+}
+
+/// The template called `name`, no visibility filter — the admin package
+/// routes, which are internal-caller-only.
+pub(crate) async fn get_by_name(db: &SqlitePool, name: &str) -> AppResult<TemplateRow> {
+    repository::find_by_name(db, name)
+        .await?
+        .ok_or_else(not_found)
+}
+
+pub(crate) async fn list_all(db: &SqlitePool) -> AppResult<Vec<TemplateRow>> {
+    repository::list_all(db).await
+}
+
+pub(crate) async fn list_grants(db: &SqlitePool) -> AppResult<Vec<(String, String)>> {
+    repository::list_grants(db).await
+}
+
+/// Publishes the bundled templates found on disk at boot: each is upserted as
+/// a global, published template, and any global template that is no longer
+/// shipped is retired (history stays reprintable).
+pub async fn sync_bundled(db: &SqlitePool, bundled: &[BundledTemplate]) -> AppResult<()> {
+    let now = chrono::Utc::now();
+    for tpl in bundled {
+        let row = TemplateRow {
+            key: generate_id(prefixes::TEMPLATE),
+            name: tpl.name.clone(),
+            family: tpl.name.clone(),
+            version: 1,
+            r#type: tpl.template_type.to_string(),
+            kind: tpl.kind.clone(),
+            description: tpl.title.clone(),
+            data_schema: sqlx::types::Json(tpl.data_schema.clone()),
+            sample_data: sqlx::types::Json(tpl.sample_data.clone()),
+            status: "published".to_string(),
+            scope: "global".to_string(),
+            file_path: tpl.file_path.clone(),
+            sha256: tpl.sha256.clone(),
+            min_app_version: None,
+            created_at: now,
+            updated_at: now,
+        };
+        repository::upsert_global(db, &row).await?;
     }
+    let names: Vec<String> = bundled.iter().map(|t| t.name.clone()).collect();
+    repository::retire_globals_not_in(db, &names).await?;
     Ok(())
 }
 
-async fn remove_template_files(dir: &Path, name: &str) {
-    for ext in ["typ", "schema.json", "json"] {
-        let path: PathBuf = dir.join(format!("{name}.{ext}"));
-        if let Err(err) = tokio::fs::remove_file(&path).await
-            && err.kind() != std::io::ErrorKind::NotFound
-        {
-            tracing::warn!(path = %path.display(), %err, "failed to roll back template file");
-        }
-    }
+pub(crate) async fn next_version(db: &SqlitePool, family: &str) -> AppResult<i64> {
+    Ok(repository::max_version(db, family).await?.unwrap_or(0) + 1)
 }
 
-/// Runtime disk re-sync backing `POST /api/templates/sync`: rebuilds the
-/// render engine from `templates_dir` (so new and edited `.typ` files are
-/// picked up without a process restart — closing the file-resolver caching
-/// gap), upserts every discovered template, deactivates rows whose `.typ`
-/// disappeared, and returns the fresh engine for the caller to swap in.
-///
-/// The engine is *returned*, not installed: swapping it into `AppState`
-/// stays the route's job so a failed sync leaves the old engine serving
-/// untouched. Deactivation runs only after a successful warm-up — a
-/// transiently-unreadable templates directory must not deactivate anything.
-pub async fn resync_from_disk(
+pub(crate) async fn title_used_by_other_family(
     db: &SqlitePool,
-    templates_dir: &str,
-    fonts_dir: &str,
-) -> AppResult<(RenderEngine, SyncTemplatesResponse)> {
-    let engine = RenderEngine::warm_up(templates_dir, fonts_dir).map_err(|err| {
-        AppError::internal(format!("failed to rebuild render engine from disk: {err}"))
-    })?;
+    title: &str,
+    family: &str,
+) -> AppResult<bool> {
+    repository::title_used_by_other_family(db, title, family).await
+}
 
-    let names: Vec<String> = engine
-        .known_templates()
-        .iter()
-        .map(|tpl| tpl.name.clone())
-        .collect();
+/// Inserts a private package version. A concurrent publish of the same
+/// `(family, version)` loses on the unique index and is reported as a
+/// conflict instead of an internal error.
+pub(crate) async fn insert_private(db: &SqlitePool, row: &TemplateRow) -> AppResult<()> {
+    let mut tx = db.begin().await?;
+    repository::insert_private(&mut tx, row)
+        .await
+        .map_err(|err| match &err {
+            sqlx::Error::Database(db_err) if db_err.is_unique_violation() => AppError::custom(
+                axum::http::StatusCode::CONFLICT,
+                codes::PACKAGE_CONFLICT,
+                "A package with this name or version already exists",
+            ),
+            _ => err.into(),
+        })?;
+    tx.commit().await?;
+    Ok(())
+}
 
-    sync_templates_from_disk(db, engine.known_templates()).await?;
-    let deactivated_count = repository::deactivate_templates_not_in(db, &names).await?;
+pub(crate) async fn retire_family(db: &SqlitePool, family: &str) -> AppResult<u64> {
+    repository::retire_family(db, family).await
+}
 
-    Ok((
-        engine,
-        SyncTemplatesResponse {
-            synced_count: names.len() as u64,
-            deactivated_count,
-            templates: names,
-        },
-    ))
+pub(crate) async fn replace_grants(
+    db: &SqlitePool,
+    family: &str,
+    tenant_keys: &[String],
+) -> AppResult<()> {
+    repository::replace_grants(db, family, tenant_keys).await
+}
+
+pub(crate) async fn add_grant(db: &SqlitePool, family: &str, tenant_key: &str) -> AppResult<()> {
+    repository::add_grant(db, family, tenant_key).await
+}
+
+/// The highest-version row of `family`, if the family exists.
+pub(crate) async fn family_head(db: &SqlitePool, family: &str) -> AppResult<Option<TemplateRow>> {
+    repository::find_family_head(db, family).await
 }

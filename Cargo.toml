@@ -7,7 +7,6 @@ license = "AGPL-3.0-only"
 publish = false
 
 [dependencies]
-arc-swap = "1"
 axum = "0.8.9"
 chrono = { version = "0.4.45", features = ["serde"] }
 dotenvy = "0.15.7"
@@ -57,6 +56,8 @@ reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"
 # Decodes a `data:image/...;base64,...` logo URI (see `clients::http`) — a
 # shop that stores its logo inline rather than at an http(s) URL.
 base64 = "0.22"
+zip = { version = "2", default-features = false, features = ["deflate"] }
+sha2 = "0.10"
 
 [dev-dependencies]
 # Gives every `tests::common::spawn_app()` call its own throwaway SQLite

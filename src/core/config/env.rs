@@ -18,6 +18,9 @@ pub struct Config {
     pub templates_dir: String,
     pub fonts_dir: String,
     pub max_render_body_bytes: usize,
+    /// Largest template package (`POST /api/packages`, `PUT /api/packages/{name}`)
+    /// accepted, in bytes. Default 20 MiB.
+    pub max_package_bytes: usize,
     /// Shared secret every caller must present as `X-Internal-Api-Key` to
     /// reach the `render`/`documents` routes (see
     /// `core::middleware::auth::InternalCaller`). Unlike every other field
@@ -108,6 +111,11 @@ impl Config {
             .parse::<usize>()
             .map_err(|_| ConfigError::Invalid("MAX_RENDER_BODY_BYTES"))?;
 
+        let max_package_bytes = env::var("MAX_PACKAGE_BYTES")
+            .unwrap_or_else(|_| "20971520".to_string())
+            .parse::<usize>()
+            .map_err(|_| ConfigError::Invalid("MAX_PACKAGE_BYTES"))?;
+
         let internal_api_key =
             env::var("INTERNAL_API_KEY").map_err(|_| ConfigError::Missing("INTERNAL_API_KEY"))?;
         validate_internal_api_key(&internal_api_key)?;
@@ -147,6 +155,7 @@ impl Config {
             templates_dir,
             fonts_dir,
             max_render_body_bytes,
+            max_package_bytes,
             internal_api_key,
             remote_image_max_bytes,
             remote_image_timeout_secs,

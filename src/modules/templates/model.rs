@@ -9,45 +9,71 @@ use chrono::{DateTime, Utc};
 use sqlx::FromRow;
 use sqlx::types::Json;
 
-use crate::domain::templates::{Template, TemplateType};
+use crate::domain::templates::{
+    Template, TemplateScope, TemplateStatus, TemplateType, parse_options,
+};
 
 #[derive(Debug, Clone, FromRow)]
 pub struct TemplateRow {
     pub key: String,
-    /// Matches the `.typ` filename or relative stem on disk (e.g. `"receipt"` or `"sticker"`)
+    /// Generated identity (`doc_temp_<nanoid>` / `lbl_temp_<nanoid>`); for a
+    /// bundled template it matches the `.typ` stem on disk.
     pub name: String,
-    /// Template categorization (`"document"` or `"label"`)
+    /// Lineage of one design's versions; a bundled template is its own
+    /// one-version family (`family == name`).
+    pub family: String,
+    pub version: i64,
     pub r#type: String,
+    /// From the schema's `x-document-kind`.
+    pub kind: String,
+    /// The schema's `title`.
     pub description: String,
-    /// The template's machine-readable input contract, synced from the
-    /// `<name>.schema.json` sidecar. Historically this column held sample
-    /// data under a misleading name; the disk sync rewrites it with the real
-    /// schema on first boot after that change (see `clients::sqlite`).
-    pub data_schema: Option<Json<serde_json::Value>>,
-    /// Worked example of valid input, synced from the `<name>.json` sidecar.
-    pub sample_data: Option<Json<serde_json::Value>>,
-    pub is_active: bool,
+    /// The template's input contract (JSON Schema).
+    pub data_schema: Json<serde_json::Value>,
+    pub sample_data: Json<serde_json::Value>,
+    pub status: String,
+    pub scope: String,
+    /// `.typ` path relative to `TEMPLATES_DIR`.
+    pub file_path: String,
+    pub sha256: String,
+    pub min_app_version: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
 
 impl TemplateRow {
-    pub fn into_template(self) -> Template {
-        let template_type = self
-            .r#type
-            .parse::<TemplateType>()
-            .unwrap_or(TemplateType::Document);
+    /// Rows are only written by this service after validation, so a value
+    /// that does not parse means the database was edited by hand.
+    pub fn try_into_template(self) -> Result<Template, String> {
+        let template_type = self.r#type.parse::<TemplateType>()?;
+        let status = self.status.parse::<TemplateStatus>()?;
+        let scope = self.scope.parse::<TemplateScope>()?;
+        let options = parse_options(&self.data_schema.0)?;
+        let is_default =
+            self.data_schema.0.get("x-default") == Some(&serde_json::Value::Bool(true));
 
-        Template {
+        Ok(Template {
             key: self.key,
             name: self.name,
+            family: self.family,
+            version: self.version,
             r#type: template_type,
+            kind: self.kind,
             description: self.description,
-            data_schema: self.data_schema.map(|Json(value)| value),
-            data: self.sample_data.map(|Json(value)| value),
-            is_active: self.is_active,
+            status,
+            scope,
+            is_default,
+            options,
+            data_schema: self.data_schema.0,
+            data: self.sample_data.0,
+            sha256: self.sha256,
+            min_app_version: self.min_app_version,
             created_at: self.created_at,
             updated_at: self.updated_at,
-        }
+        })
+    }
+
+    pub fn scope(&self) -> Result<TemplateScope, String> {
+        self.scope.parse()
     }
 }

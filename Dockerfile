@@ -54,7 +54,7 @@ RUN groupadd -g 10001 appuser && \
 WORKDIR /app
 
 # Prepare directories for binary, assets, and persistent SQLite storage
-RUN mkdir -p /app/data /app/templates /app/fonts && \
+RUN mkdir -p /app/data /app/templates/packages /app/fonts && \
     chown -R appuser:appuser /app
 
 # Copy stripped binary from builder stage

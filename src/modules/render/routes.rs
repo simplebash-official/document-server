@@ -81,12 +81,9 @@ async fn render_template(
     Path(template_key): Path<String>,
     Json(data): Json<serde_json::Value>,
 ) -> AppResult<Response> {
-    // `load_full()` snapshots the current engine — a sync endpoint swapping
-    // in a rebuilt one mid-request doesn't affect this render.
-    let render = state.render.load_full();
     let (pdf_bytes, _) = service::render_template(
         &state.db,
-        &render,
+        &state.render,
         &state.config,
         &template_key,
         data,

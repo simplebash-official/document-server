@@ -170,3 +170,91 @@ async fn upgrading_a_pre_tenant_documents_table_defaults_existing_rows_to_the_si
             .unwrap();
     assert_eq!(tenant_key, "");
 }
+
+/// A database from before template packages keeps the old `templates` shape
+/// (`is_active`, no family/version/scope). `connect` rebuilds it: each row
+/// becomes a one-version global family, `is_active` becomes `status`, and the
+/// `documents` rows that point at a template key still resolve.
+#[tokio::test]
+async fn upgrading_a_pre_packages_database_turns_templates_into_global_families() {
+    let file = tempfile::NamedTempFile::new().unwrap();
+    let url = format!("sqlite://{}", file.path().display());
+
+    {
+        let pool = connect_raw(&url).await;
+        sqlx::query(
+            "CREATE TABLE templates (
+                key TEXT PRIMARY KEY,
+                name TEXT NOT NULL UNIQUE,
+                type TEXT NOT NULL DEFAULT 'document',
+                description TEXT NOT NULL DEFAULT '',
+                data_schema TEXT,
+                sample_data TEXT,
+                is_active INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        for (key, name, active) in [
+            ("tpl_a", "doc_temp_aaaaaaaaaaaaaaaa", 1),
+            ("tpl_b", "lbl_temp_bbbbbbbbbbbbbbbb", 0),
+        ] {
+            let kind = if name.starts_with("lbl") {
+                "label"
+            } else {
+                "document"
+            };
+            sqlx::query(
+                "INSERT INTO templates (key, name, type, description, data_schema, sample_data, is_active, created_at, updated_at)
+                 VALUES (?, ?, ?, 'Old design', '{\"x-document-kind\":\"a4-invoice\"}', '{\"a\":1}', ?, '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
+            )
+            .bind(key)
+            .bind(name)
+            .bind(kind)
+            .bind(active)
+            .execute(&pool)
+            .await
+            .unwrap();
+        }
+        pool.close().await;
+    }
+
+    let pool = document_server::clients::sqlite::connect(&url)
+        .await
+        .unwrap();
+    let rows: Vec<(String, String, i64, String, String, String, String)> = sqlx::query_as(
+        "SELECT key, family, version, status, scope, kind, file_path FROM templates ORDER BY key",
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(rows.len(), 2);
+    assert_eq!(
+        rows[0],
+        (
+            "tpl_a".into(),
+            "doc_temp_aaaaaaaaaaaaaaaa".into(),
+            1,
+            "published".into(),
+            "global".into(),
+            "a4-invoice".into(),
+            "documents/doc_temp_aaaaaaaaaaaaaaaa.typ".into()
+        )
+    );
+    assert_eq!(rows[1].3, "retired");
+    assert_eq!(rows[1].6, "labels/lbl_temp_bbbbbbbbbbbbbbbb.typ");
+
+    // Idempotent: a second connect finds the new shape and leaves it alone.
+    pool.close().await;
+    let pool = document_server::clients::sqlite::connect(&url)
+        .await
+        .unwrap();
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM templates")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(count, 2);
+}

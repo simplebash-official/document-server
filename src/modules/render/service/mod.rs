@@ -15,10 +15,12 @@ use crate::{
         constants::codes,
         error::{AppError, AppResult},
     },
+    domain::templates::TemplateScope,
     modules::{
         documents,
         render::repository::{assets::StagedImage, typst, typst::TypstEngineError},
-        template_data, templates,
+        template_data,
+        templates::{self, model::TemplateRow},
     },
 };
 
@@ -131,7 +133,7 @@ async fn render_template_inner(
     data: serde_json::Value,
     tenant_key: &str,
 ) -> AppResult<(Vec<u8>, String)> {
-    let template = templates::service::get_active_template_by_key(db, template_key).await?;
+    let template = templates::service::resolve_renderable(db, tenant_key, template_key).await?;
 
     // Stored shared/static blobs are merged under the request payload
     // (request wins) before validation and compilation — the compiled input
@@ -144,14 +146,7 @@ async fn render_template_inner(
 
     // Validation (and any `logoUrl` fetch) lives inside `compile_pdf`, so
     // this path and the reprint path enforce the contract identically.
-    let pdf_bytes = compile_pdf(
-        render,
-        cfg,
-        &template.name,
-        template.data_schema.as_ref(),
-        compiled_input,
-    )
-    .await?;
+    let pdf_bytes = compile_pdf(render, cfg, &template, compiled_input).await?;
 
     documents::service::record_document(
         db,
@@ -165,39 +160,39 @@ async fn render_template_inner(
     Ok((pdf_bytes, template.key))
 }
 
-/// Validates `data`, resolves any `logoUrl` in it to image bytes, compiles
-/// `template_name` against the result, and translates any Typst failure into
-/// the right `AppError` — shared by `render_template` above and
-/// `documents::service::reprint_document` (`GET /api/documents/{key}/pdf`),
-/// so both go through the exact same contract enforcement and
+/// Validates `data` against the template's schema, resolves any `logoUrl` in
+/// it to image bytes, compiles the template against the result, and
+/// translates any Typst failure into the right `AppError` — shared by
+/// `render_template` above, `documents::service::reprint_document`
+/// (`GET /api/documents/{key}/pdf`) and the package preview/publish smoke
+/// compile, so all go through the exact same contract enforcement and
 /// compile-error -> HTTP-status mapping instead of duplicating it.
 ///
 /// `async` because an http(s) `logoUrl` triggers an outbound download (see
 /// `clients::http`); a `data:` URI is decoded inline. The compile itself is
 /// still synchronous CPU work.
 ///
-/// Takes the template's `data_schema` alongside its name because validation
-/// lives with compilation (`render_template` and the reprint path each
-/// resolve their template themselves, and both must enforce the same
-/// contract). `None` skips validation — the no-schema-sidecar behavior.
+/// A bundled template compiles on the shared engine; a private package, or
+/// any render that staged an image, compiles on a one-shot engine.
 pub(crate) async fn compile_pdf(
     render: &RenderEngine,
     cfg: &Config,
-    template_name: &str,
-    data_schema: Option<&serde_json::Value>,
+    template: &TemplateRow,
     mut data: serde_json::Value,
 ) -> AppResult<Vec<u8>> {
-    if let Some(data_schema) = data_schema {
-        validate_against_schema(data_schema, &data).inspect_err(|err| {
-            tracing::warn!(
-                category = "render",
-                event = "schema_invalid",
-                template_name,
-                error = %err,
-                "render payload failed schema validation"
-            );
-        })?;
-    }
+    let template_name = template.name.as_str();
+    validate_against_schema(&template.data_schema.0, &data).inspect_err(|err| {
+        tracing::warn!(
+            category = "render",
+            event = "schema_invalid",
+            template_name,
+            error = %err,
+            "render payload failed schema validation"
+        );
+    })?;
+    let scope = template
+        .scope()
+        .map_err(|err| AppError::internal(format!("template row is corrupt: {err}")))?;
 
     // `logo` is a local filename the server injects below after resolving
     // `logoUrl`; a caller-supplied value would let a payload point the
@@ -238,24 +233,22 @@ pub(crate) async fn compile_pdf(
     if let Some(image) = logo_image {
         // Compile through a one-shot engine so the staged image never enters
         // the shared engine's unbounded file cache.
-        let rel_path = render.template_rel_path(template_name).ok_or_else(|| {
-            AppError::internal(format!("no file path known for template '{template_name}'"))
-        })?;
-        let rel_path = rel_path.to_owned();
+        let rel_path = template.file_path.as_str();
 
-        let staged =
-            StagedImage::write(std::path::Path::new(&cfg.templates_dir), &rel_path, &image)
-                .map_err(|err| {
-                    AppError::internal(format!("could not stage remote image: {err}"))
-                })?;
+        let staged = StagedImage::write(std::path::Path::new(&cfg.templates_dir), rel_path, &image)
+            .map_err(|err| AppError::internal(format!("could not stage remote image: {err}")))?;
 
         // Point the template at the local file. `staged` (and thus the file)
         // is dropped when this block ends, whatever the compile result.
         data["logo"] = serde_json::Value::String(staged.file_name.clone());
-        return typst::render_pdf_once(render, &rel_path, data).map_err(map_typst_error);
+        return typst::render_pdf_once(render, rel_path, data).map_err(map_typst_error);
     }
 
-    typst::render_pdf(render, template_name, data).map_err(map_typst_error)
+    match scope {
+        TemplateScope::Global => typst::render_pdf_bundled(render, &template.file_path, data),
+        TemplateScope::Private => typst::render_pdf_once(render, &template.file_path, data),
+    }
+    .map_err(map_typst_error)
 }
 
 fn map_typst_error(err: TypstEngineError) -> AppError {

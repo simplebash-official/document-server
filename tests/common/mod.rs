@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use arc_swap::ArcSwap;
 use axum::{Router, http::header, response::IntoResponse, routing::get};
 use document_server::{
     app, app::AppState, clients, clients::render::RenderEngine, core::config::Config,
@@ -59,6 +58,7 @@ pub async fn spawn_app_isolated_templates() -> TestApp {
 /// the real `templates/`/`fonts/` directories, resolved relative to the
 /// crate root `cargo test` runs from). Every call gets its own database, so
 /// tests are isolated from each other with no external service to run.
+#[allow(dead_code)]
 pub async fn spawn_app() -> TestApp {
     spawn_app_with_templates_dir("templates").await
 }
@@ -92,7 +92,7 @@ pub async fn spawn_app_with_templates_dir(templates_dir: &str) -> TestApp {
     let render = RenderEngine::warm_up(&config.templates_dir, &config.fonts_dir)
         .expect("failed to warm up render engine for test run");
 
-    templates::service::sync_templates_from_disk(&db, render.known_templates())
+    templates::service::sync_bundled(&db, render.bundled())
         .await
         .expect("failed to sync templates from disk for test run");
 
@@ -100,7 +100,7 @@ pub async fn spawn_app_with_templates_dir(templates_dir: &str) -> TestApp {
     let state = AppState {
         config: config.clone(),
         db: db.clone(),
-        render: Arc::new(ArcSwap::from_pointee(render)),
+        render: Arc::new(render),
     };
 
     TestApp {

@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use arc_swap::ArcSwap;
 use axum::{
     body::Body,
     http::{Request, StatusCode},
@@ -25,6 +24,7 @@ async fn portal_renders_at_root_and_api() {
         templates_dir: "templates".to_string(),
         fonts_dir: "fonts".to_string(),
         max_render_body_bytes: 1024 * 1024,
+        max_package_bytes: 1024 * 1024,
         internal_api_key: "test-internal-api-key".to_string(),
         remote_image_max_bytes: 5242880,
         remote_image_timeout_secs: 10,
@@ -39,7 +39,7 @@ async fn portal_renders_at_root_and_api() {
     let state = AppState {
         config: Arc::new(config),
         db: pool,
-        render: Arc::new(ArcSwap::from_pointee(render)),
+        render: Arc::new(render),
     };
     let app = app::build_router(state);
 

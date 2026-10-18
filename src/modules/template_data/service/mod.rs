@@ -20,10 +20,9 @@ use crate::{
 /// (`""` for single-shop/desktop — see `core::middleware::auth::TenantKey`).
 /// The template must exist first — a typo'd name should fail loudly here
 /// rather than silently create an orphan blob no render will ever read.
-/// Matched by *name* (any active state): a deactivated template's stored
-/// data stays editable, same as its history stays reprintable. Templates
-/// themselves are not tenant-scoped (shared disk content across every
-/// tenant), only the blob is.
+/// Matched by *name* (any status): a retired template's stored data stays
+/// editable, same as its history stays reprintable. The template must be
+/// usable by the tenant (global, or a private one granted to it).
 pub(crate) async fn set_template_data(
     db: &SqlitePool,
     tenant_key: &str,
@@ -31,7 +30,7 @@ pub(crate) async fn set_template_data(
     data_key: &str,
     data: serde_json::Value,
 ) -> AppResult<TemplateData> {
-    templates::service::get_template_by_name(db, template_name)
+    templates::service::ensure_usable_by(db, tenant_key, template_name)
         .await
         .map_err(|_| {
             AppError::not_found_with_code(

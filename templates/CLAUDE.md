@@ -2,8 +2,8 @@
 
 ## Layout & discovery
 
-- `templates/documents/*.typ` — standard printable documents; `templates/labels/*.typ` — thermal stickers. A bare `.typ` at the top level would also be discovered as a `document`. Only these two subdirectory names carry meaning to the scanner (`clients::render::scan_templates`): anything else becomes a `document` too.
-- `templates/lib/` is skipped by the scan — vendored Typst packages, never renderable templates.
+- `templates/documents/*.typ` — standard printable documents; `templates/labels/*.typ` — thermal stickers. These two folders are the **bundled** templates (`clients::render::scan_bundled`); a `.typ` anywhere else is ignored.
+- `templates/lib/` — vendored Typst packages, never templates. Bundled templates import `../lib/…`; published packages (`templates/packages/<name>/`, runtime data on a persistent volume, never committed) import `../../lib/…`.
 
 ## Public examples vs private designs
 
@@ -21,11 +21,11 @@ must keep both the example and the private `.typ` compiling.
 A template's filename stem **is** its identity (`templates.name`, and the scope key for
 stored `template-data` blobs). It is an opaque generated id, not a human word:
 `doc_temp_<nanoid>` for a `documents/` template, `lbl_temp_<nanoid>` for a `labels/` one
-(`core::id::generate_template_name`). `POST /api/templates` mints these; adding a
-template by hand means following the same convention (then `POST /api/templates/sync`).
+(`core::id::generate_template_name`). `POST /api/packages` mints these; a bundled
+template added by hand follows the same convention and is picked up at the next start.
 
 The **human name** of a template lives in its `<name>.schema.json` `title` field. The
-sync pass copies that `title` into the `templates.description` column, which is what
+boot sync copies that `title` into the `templates.description` column, which is what
 `GET /api/templates` and integration clients read to tell templates apart. Seed
 templates today: `doc_temp_vEf0Y7jQHQj2rIuO` = "A4 Invoice" (a branded/modern layout
 with an optional `logoUrl` — see below), `doc_temp_ZahcoYg8xCQjuc8c` = "A4 Invoice Modern"
@@ -42,20 +42,20 @@ recorded `documents` row so the table doesn't carry the blob.
 
 ## Sidecar conventions (per template)
 
-Every `<name>.typ` may have two sidecars, both optional and both read by `scan_templates`:
+Every bundled `<name>.typ` must have both sidecars (startup fails without them):
 
-1. **`<name>.schema.json`** — JSON Schema draft-07 input contract. This is the machine-readable integration surface: it's synced into the `templates.data_schema` column and served as `Template.dataSchema` on `GET /api/templates(/{key})`, and render payloads are validated against it before compilation (`422 RENDER_VALIDATION_FAILED`). Conventions: enforce `required` + field types; keep `"additionalProperties": true` so callers can carry extra context without being rejected. When you add a required field to a `.typ`, update its schema **and** SimpleBash POS's backend builder in the same change — that service pre-validates against the same schema and will refuse to send non-conforming payloads.
-2. **`<name>.json`** — worked sample data, exposed as `Template.data`. Documentation only, never enforced.
+1. **`<name>.schema.json`** — JSON Schema draft-07 input contract. This is the machine-readable integration surface: it's stored in the `templates.data_schema` column at boot and served as `Template.dataSchema` on `GET /api/templates(/{key})`, and render payloads are validated against it before compilation (`422 RENDER_VALIDATION_FAILED`). Conventions: enforce `required` + field types; keep `"additionalProperties": true` so callers can carry extra context without being rejected. When you add a required field to a `.typ`, update its schema **and** SimpleBash POS's backend builder in the same change — that service pre-validates against the same schema and will refuse to send non-conforming payloads.
+2. **`<name>.json`** — worked sample data, exposed as `Template.data`. It must satisfy the schema; it is the Settings preview payload.
 
-Historical note: samples once lived in the `data_schema` DB column under a misleading name; the sync pass now writes the real schema there and keeps samples in `sample_data`.
+Two schema keys are mandatory on every template: **`x-document-kind`** and — on exactly one bundled template per kind — **`x-default: true`**. A schema may also declare **`x-options`**: an array of controls (`toggle` with boolean default, `select` with `choices`, `color` as `#RRGGBB`, `text` with `maxLength` 1-200), each with a `key`, `label` and `default`. The payload carries the chosen values in `options`, so when a template declares options its schema must list each key under `properties.options.properties` and require `options`. Rules are in `domain::templates::validate_template_schema`.
 
 ## Document kinds & the POS template dropdowns
 
 Every `documents/*.schema.json` declares what the template is *for* with a top-level
 `"x-document-kind"` (unknown keywords are harmless annotations to the `jsonschema` validator;
 the marker rides along in `dataSchema` on `GET /api/templates`). Kinds in use: `a4-invoice`,
-`thermal-receipt`, `credit-note`, `quotation`, `analytics-report`. SimpleBash POS's backend lists the
-**active** templates of a kind in its "Document Designs" dropdowns (Settings and the print
+`thermal-receipt`, `credit-note`, `quotation`, `analytics-report`, `product-label`. SimpleBash POS's backend lists the
+**published** templates of a kind in its "Document Designs" dropdowns (Settings and the print
 preview), shows each schema `title` as the label, and renders the template's `.json` sample
 as the preview — so a new template needs no backend or frontend change.
 
@@ -65,12 +65,12 @@ Rules that keep that safe (guarded by `tests/templates_test.rs` and, in the back
 - **All templates of one kind accept the kind's standard payload** (the one the backend's
   builder sends). Extra optional fields are fine (`additionalProperties: true`); extra
   *required* fields are not. A `thermal-receipt` must support both `paperWidthMm` 58 and 80.
-- **Titles are unique** across documents and labels: the title is the dropdown label and the
-  backend's lookup key for the built-in default of each kind.
+- **Titles are unique** across documents and labels: the title is the dropdown label. The built-in
+  default of a kind is the template with `"x-default": true`, not a title match.
 - **The sample validates against its own schema** and compiles; keep `logoUrl` out of it or
   expect the backend to drop it for previews.
-- The list endpoint returns inactive rows too and sorts by id — consumers must filter on
-  `isActive` and sort by title themselves.
+- The list endpoint returns only the latest published version of each design the tenant may
+  use, sorted by title.
 
 **A4 invoice payment fields** (both A4 designs follow the same reading): `tenderedAmountCents` is the money the customer handed over (the total when nothing was recorded), `changeDueCents` the change given back, `amountPaidCents` what has been paid so far, `balanceDueCents` what is still owed. A design's **Total Due is `balanceDueCents`** — 0.00 on a paid invoice, never the invoice total (that is the Grand Total); a voided invoice shows 0.00.
 
@@ -79,11 +79,19 @@ Rules that keep that safe (guarded by `tests/templates_test.rs` and, in the back
 1. Draft it in `document-templates/lab/…` and compile it with `typst`.
 2. Promote it: private `document-templates/documents/doc_temp_<16 alnum>.typ` (self-contained,
    fonts from `fonts/`, imports only from `../lib/`).
-3. Here: `documents/doc_temp_<same id>.schema.json` (unique `title`, `x-document-kind`, the
-   kind's standard contract), `.json` sample, and a plain public example `.typ`.
+3. Here: `documents/doc_temp_<same id>.schema.json` (unique `title`, `x-document-kind`, `x-default`
+   only if it is the kind's built-in default, the kind's standard contract), `.json` sample, and a plain public example `.typ`.
 4. `cargo test` here and in `pos/backend` (schema drift), then deploy / build the desktop
    (`assemble-templates.sh` overlays the private `.typ`). It appears in the dropdowns.
 
 ## Barcode/QR (`templates/lib/`)
 
 The Product Sticker Label template (`templates/labels/lbl_temp_qklcWIolwoFFN3xk.typ`) draws Code128 barcodes via the vendored `tiaoma` package (called with `show-hrt: false` — Zint's own caption is replaced by the template's, so the caption size follows the element — and `barcode-quiet-zones: true`, so the bars always carry their quiet zone) and QR codes via the vendored `zebra` package, both under `templates/lib/`. Both are **vendored copies**, not `@preview` imports resolved over the network — `RenderEngine` deliberately has no package resolver, only `with_file_system_resolver`, so a template can only ever `#import` something that's actually checked into this repo. This is the same determinism argument as bundling fonts explicitly: render output must not depend on package-registry availability or on which version happened to be cached on whichever machine runs the server. See `templates/lib/README.md` for exact provenance/upgrade instructions. Both packages use a WASM plugin (`plugin("...wasm")`) for their encoding math — that resolves through the same file-system resolver as any other asset, no special engine support was needed.
+
+### Per-client designs are packages, not files here
+
+A design made for one customer is **not** added to this folder. It is a zip published with
+`POST /api/packages` (see the `packages` module in `../CLAUDE.md`), granted to that customer's
+shop, and stored on the persistent `templates/packages/` volume. Its `.typ` imports `../../lib/…`
+(it sits one folder deeper than the bundled ones), ships its own `schema.json` / `sample.json`,
+and may bundle images under `assets/`. Never commit published packages.

@@ -1,6 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Product Sticker Label",
+  "x-document-kind": "product-label",
+  "x-default": true,
   "description": "Input contract for the Product Sticker Label template: a shop-designed label layout (size plus absolutely placed text, barcode, QR code and line elements) and the stickers to print with it. One page per sticker; every barcode is Code128 and every QR code encodes the sticker's `code`.",
   "type": "object",
   "additionalProperties": false,

@@ -21,8 +21,15 @@ pub const PDF_EXPORT_FAILED: &str = "PDF_EXPORT_FAILED";
 /// non-image response, too large, unreachable) — see `clients::http`.
 pub const REMOTE_IMAGE_FETCH_FAILED: &str = "REMOTE_IMAGE_FETCH_FAILED";
 
-// Template authoring (see `modules::templates::service::create_template`).
-pub const TEMPLATE_CREATE_FAILED: &str = "TEMPLATE_CREATE_FAILED";
+// Template packages (see `modules::packages`).
+/// The uploaded zip is not a valid template package (bad manifest, schema,
+/// sample, options, imports, assets, or it does not compile).
+pub const PACKAGE_INVALID: &str = "PACKAGE_INVALID";
+pub const PACKAGE_TOO_LARGE: &str = "PACKAGE_TOO_LARGE";
+pub const PACKAGE_NOT_FOUND: &str = "PACKAGE_NOT_FOUND";
+/// An install (`PUT /api/packages/{name}`) names a package that already
+/// exists with different content.
+pub const PACKAGE_CONFLICT: &str = "PACKAGE_CONFLICT";
 
 // Documents (see `modules::documents::service`).
 pub const DOCUMENT_NOT_FOUND: &str = "DOCUMENT_NOT_FOUND";

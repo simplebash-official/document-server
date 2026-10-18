@@ -75,25 +75,19 @@ pub(crate) async fn get_document_by_key(db: &SqlitePool, key: &str) -> AppResult
 }
 
 /// Re-renders a previously-recorded document from its stored `data` by
-/// recompiling against the template, not a cached copy of the original PDF
-/// bytes (none are stored — see spec §6.2). Backs `GET /api/documents/{key}/pdf`.
+/// recompiling against the template it was first rendered with, not a cached
+/// copy of the original PDF bytes (none are stored — see spec §6.2). Backs
+/// `GET /api/documents/{key}/pdf`.
 ///
-/// "Recompiling" here means "against whatever `RenderEngine` loaded at its
-/// last `warm_up()`", not literally the `.typ` file's current on-disk bytes
-/// — `with_file_system_resolver`'s underlying resolver is
-/// `.into_cached()`'d by `typst-as-lib`, so a template edited on disk while
-/// the server keeps running is *not* picked up until a restart. A template
-/// fix followed by a restart benefits every historical document's reprint,
-/// same idea as SimpleBash POS's usual "genuinely fresh, not stale" guarantees,
-/// just scoped to "fresh as of last boot" rather than "fresh this instant"
-/// — true hot-reload is unimplemented Phase 4 work (see CLAUDE.md's Build
-/// Phases).
+/// A published template is immutable (a design change is a new template row),
+/// so the reprint uses exactly the design the document was rendered with.
 ///
-/// Looked up via `templates::service::get_template_by_key` — deliberately
-/// *not* the `_active_` variant `render::service::render_template` uses:
-/// deactivating a template is an editorial decision about future renders,
-/// not a statement that history rendered against it stops being
-/// reprintable, so an inactive template must still work here.
+/// Resolved through `templates::service::resolve_reprintable` — deliberately
+/// *not* the renderable variant `render::service::render_template` uses:
+/// retiring a template is an editorial decision about future renders, not a
+/// statement that history rendered against it stops being reprintable, so a
+/// retired template must still work here. Tenant visibility still applies,
+/// against the DOCUMENT's own recorded tenant.
 pub(crate) async fn reprint_document(
     db: &SqlitePool,
     render_engine: &RenderEngine,
@@ -101,7 +95,9 @@ pub(crate) async fn reprint_document(
     key: &str,
 ) -> AppResult<Vec<u8>> {
     let document = get_document_by_key(db, key).await?;
-    let template = templates::service::get_template_by_key(db, &document.template_key).await?;
+    let template =
+        templates::service::resolve_reprintable(db, &document.tenant_key, &document.template_key)
+            .await?;
 
     // The stored `data` is the original *request* payload (see
     // `render_template`), so the stored-data merge — and any `logoUrl`
@@ -121,12 +117,5 @@ pub(crate) async fn reprint_document(
     )
     .await?;
 
-    render::service::compile_pdf(
-        render_engine,
-        cfg,
-        &template.name,
-        template.data_schema.as_ref(),
-        compiled_input,
-    )
-    .await
+    render::service::compile_pdf(render_engine, cfg, &template, compiled_input).await
 }

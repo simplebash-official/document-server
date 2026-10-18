@@ -3,6 +3,8 @@
 pub const TEMPLATE: &str = "tpl";
 pub const DOCUMENT: &str = "doc";
 pub const TEMPLATE_DATA: &str = "tdat";
+/// A template family (the lineage of one design's versions).
+pub const TEMPLATE_FAMILY: &str = "fam";
 
 /// Prefixes for a template's generated *name* (its stable on-disk identity /
 /// `.typ` stem), as opposed to `TEMPLATE` above which prefixes the row's

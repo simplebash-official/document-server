@@ -7,7 +7,7 @@ use utoipa::{
 /// merging each module's `OpenApiRouter` (see `app::build_router`) — this
 /// struct only carries top-level metadata. `render`/`documents` routes
 /// reference the `internalApiKey` security scheme registered below by
-/// `SecurityAddon`; `templates`/`barcodes`/`qrcodes` stay unauthenticated.
+/// `SecurityAddon`; `barcodes`/`qrcodes` stay unauthenticated.
 #[derive(OpenApi)]
 #[openapi(
     modifiers(&SecurityAddon),
@@ -18,7 +18,8 @@ use utoipa::{
     ),
     tags(
         (name = "render", description = "Template rendering"),
-        (name = "templates", description = "Template metadata"),
+        (name = "templates", description = "Template metadata visible to the calling tenant"),
+        (name = "packages", description = "Versioned template packages: publish, install, grant, retire"),
         (name = "documents", description = "Rendered document records"),
         (name = "template-data", description = "Stored shared/static template data merged into render payloads"),
         (name = "barcodes", description = "1D Barcode generation"),
