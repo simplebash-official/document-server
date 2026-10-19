@@ -20,14 +20,21 @@ pub async fn connect(database_url: &str) -> Result<SqlitePool, sqlx::Error> {
         // under concurrent requests.
         .journal_mode(SqliteJournalMode::Wal);
 
-    let pool = SqlitePoolOptions::new()
+    // Schema setup gets its own single-connection pool, closed before the real
+    // pool opens: otherwise a pooled connection that ran earlier statements can
+    // keep a stale view of `template_data` across the table rebuild in
+    // `create_schema` and reject `ON CONFLICT(tenant_key, ...)` on the new index.
+    let setup = SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect_with(options.clone())
+        .await?;
+    create_schema(&setup).await?;
+    setup.close().await;
+
+    SqlitePoolOptions::new()
         .max_connections(5)
         .connect_with(options)
-        .await?;
-
-    create_schema(&pool).await?;
-
-    Ok(pool)
+        .await
 }
 
 /// Wires sqlx statement logging unless the process started with
