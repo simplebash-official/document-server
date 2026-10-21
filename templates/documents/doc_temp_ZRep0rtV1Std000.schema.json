@@ -1,0 +1,132 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Z-Report",
+  "x-document-kind": "z-report",
+  "x-default": true,
+  "description": "Input contract for the A4 Z-Report (End-of-Session Summary) template.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "sessionNumber",
+    "terminalId",
+    "cashierName",
+    "status",
+    "openedAt",
+    "closedAt",
+    "grossSalesCents",
+    "returnsCents",
+    "netSalesCents",
+    "discountCents",
+    "totalInvoicesCount",
+    "paymentMethods",
+    "cashReconciliation",
+    "cashMovements",
+    "shopTradingName",
+    "shopAddressLines",
+    "generatedAt"
+  ],
+  "properties": {
+    "logoUrl": { "type": "string" },
+    "logoWidth": { "type": "number" },
+    "sessionNumber": { "type": "string" },
+    "terminalId": { "type": "string" },
+    "cashierName": { "type": "string" },
+    "closingCashierName": { "type": "string" },
+    "status": {
+      "type": "string",
+      "enum": ["open", "closing", "closed", "reopened"]
+    },
+    "openedAt": { "type": "string" },
+    "closedAt": { "type": "string" },
+    "grossSalesCents": { "type": "integer" },
+    "returnsCents": { "type": "integer" },
+    "netSalesCents": { "type": "integer" },
+    "discountCents": { "type": "integer" },
+    "totalInvoicesCount": { "type": "integer" },
+    "paymentMethods": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["method", "count", "totalCents"],
+        "properties": {
+          "method": { "type": "string" },
+          "count": { "type": "integer" },
+          "totalCents": { "type": "integer" }
+        }
+      }
+    },
+    "cashReconciliation": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "openingFloatCents",
+        "cashSalesCents",
+        "payInCents",
+        "payOutCents",
+        "cashRefundsCents",
+        "ownerWithdrawalsCents",
+        "cashDropsCents",
+        "expectedCashCents",
+        "countedCashCents",
+        "varianceCents",
+        "closingFloatCents",
+        "safeDepositCents"
+      ],
+      "properties": {
+        "openingFloatCents": { "type": "integer" },
+        "cashSalesCents": { "type": "integer" },
+        "payInCents": { "type": "integer" },
+        "payOutCents": { "type": "integer" },
+        "cashRefundsCents": { "type": "integer" },
+        "ownerWithdrawalsCents": { "type": "integer" },
+        "cashDropsCents": { "type": "integer" },
+        "expectedCashCents": { "type": "integer" },
+        "countedCashCents": { "type": "integer" },
+        "varianceCents": { "type": "integer" },
+        "closingFloatCents": { "type": "integer" },
+        "safeDepositCents": { "type": "integer" }
+      }
+    },
+    "cashMovements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "movementNumber",
+          "movementType",
+          "amountCents",
+          "reason",
+          "recordedByNameSnapshot",
+          "createdAt"
+        ],
+        "properties": {
+          "movementNumber": { "type": "string" },
+          "movementType": { "type": "string" },
+          "amountCents": { "type": "integer" },
+          "reason": { "type": "string" },
+          "recipientOrSource": { "type": "string" },
+          "recordedByNameSnapshot": { "type": "string" },
+          "createdAt": { "type": "string" }
+        }
+      }
+    },
+    "openingNote": { "type": "string" },
+    "closingNote": { "type": "string" },
+    "shopTradingName": { "type": "string" },
+    "shopLegalName": { "type": "string" },
+    "shopEmail": { "type": "string" },
+    "shopWebsite": { "type": "string" },
+    "shopBusinessRegNo": { "type": "string" },
+    "shopVatNo": { "type": "string" },
+    "shopIsVatRegistered": { "type": "boolean" },
+    "shopAddressLines": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "shopPrimaryPhone": { "type": "string" },
+    "shopSecondaryPhone": { "type": "string" },
+    "generatedAt": { "type": "string" }
+  }
+}

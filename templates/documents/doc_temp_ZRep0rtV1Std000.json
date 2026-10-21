@@ -1,0 +1,99 @@
+{
+  "sessionNumber": "SES-000042",
+  "terminalId": "TERM-01",
+  "cashierName": "Kasun Perera",
+  "closingCashierName": "Kasun Perera",
+  "status": "closed",
+  "openedAt": "21 Oct 2026 08:30",
+  "closedAt": "21 Oct 2026 18:00",
+  "grossSalesCents": 1850000,
+  "returnsCents": 50000,
+  "netSalesCents": 1800000,
+  "discountCents": 25000,
+  "totalInvoicesCount": 24,
+  "paymentMethods": [
+    {
+      "method": "cash",
+      "count": 14,
+      "totalCents": 1150000
+    },
+    {
+      "method": "card",
+      "count": 8,
+      "totalCents": 550000
+    },
+    {
+      "method": "online",
+      "count": 2,
+      "totalCents": 150000
+    }
+  ],
+  "cashReconciliation": {
+    "openingFloatCents": 200000,
+    "cashSalesCents": 1150000,
+    "payInCents": 50000,
+    "payOutCents": 30000,
+    "cashRefundsCents": 50000,
+    "ownerWithdrawalsCents": 100000,
+    "cashDropsCents": 700000,
+    "expectedCashCents": 520000,
+    "countedCashCents": 520000,
+    "varianceCents": 0,
+    "closingFloatCents": 200000,
+    "safeDepositCents": 320000
+  },
+  "cashMovements": [
+    {
+      "movementNumber": "CM-000101",
+      "movementType": "payIn",
+      "amountCents": 50000,
+      "reason": "Till coin replenishment",
+      "recipientOrSource": "Main Safe",
+      "recordedByNameSnapshot": "Kasun Perera",
+      "createdAt": "21 Oct 2026 10:15"
+    },
+    {
+      "movementNumber": "CM-000102",
+      "movementType": "payOutExpense",
+      "amountCents": 30000,
+      "reason": "Office cleaning supplies",
+      "recipientOrSource": "Supermarket",
+      "recordedByNameSnapshot": "Kasun Perera",
+      "createdAt": "21 Oct 2026 12:45"
+    },
+    {
+      "movementNumber": "CM-000103",
+      "movementType": "cashDrop",
+      "amountCents": 700000,
+      "reason": "Mid-day safe drop",
+      "recipientOrSource": "Floor Drop Box",
+      "recordedByNameSnapshot": "Kasun Perera",
+      "createdAt": "21 Oct 2026 15:30"
+    },
+    {
+      "movementNumber": "CM-000104",
+      "movementType": "ownerWithdrawal",
+      "amountCents": 100000,
+      "reason": "Owner personal drawing",
+      "recipientOrSource": "Owner",
+      "recordedByNameSnapshot": "Kasun Perera",
+      "createdAt": "21 Oct 2026 17:10"
+    }
+  ],
+  "openingNote": "Normal morning opening with standard float.",
+  "closingNote": "All registers reconciled, drawer balanced perfectly.",
+  "shopTradingName": "TechFix Solutions",
+  "shopLegalName": "TechFix Solutions (Pvt) Ltd",
+  "shopEmail": "info@techfix.lk",
+  "shopWebsite": "https://techfix.lk",
+  "shopBusinessRegNo": "PV-123456",
+  "shopVatNo": "123456789-7000",
+  "shopIsVatRegistered": true,
+  "shopAddressLines": [
+    "No. 124 Galle Road",
+    "Colombo 03, Sri Lanka"
+  ],
+  "shopPrimaryPhone": "+94 11 234 5678",
+  "shopSecondaryPhone": "+94 77 123 4567",
+  "generatedAt": "21 Oct 2026 18:02"
+}

@@ -53,8 +53,7 @@ Two schema keys are mandatory on every template: **`x-document-kind`** and — o
 
 Every `documents/*.schema.json` declares what the template is *for* with a top-level
 `"x-document-kind"` (unknown keywords are harmless annotations to the `jsonschema` validator;
-the marker rides along in `dataSchema` on `GET /api/templates`). Kinds in use: `a4-invoice`,
-`thermal-receipt`, `credit-note`, `quotation`, `analytics-report`, `product-label`. SimpleBash POS's backend lists the
+the marker rides along in `dataSchema` on `GET /api/templates`). Kinds in use: `a4-invoice`, `thermal-receipt`, `credit-note`, `quotation`, `z-report`, `analytics-report`, `product-label`. SimpleBash POS's backend lists the
 **published** templates of a kind in its "Document Designs" dropdowns (Settings and the print
 preview), shows each schema `title` as the label, and renders the template's `.json` sample
 as the preview — so a new template needs no backend or frontend change.

@@ -402,6 +402,61 @@ async fn render_quotation_rejects_a_payload_missing_required_fields() {
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
 }
 
+fn sample_z_report_data() -> serde_json::Value {
+    let path = std::path::Path::new("templates/documents/doc_temp_ZRep0rtV1Std000.json");
+    serde_json::from_str(&std::fs::read_to_string(path).expect("z-report sample exists"))
+        .expect("z-report sample is JSON")
+}
+
+async fn render_z_report(app: &common::TestApp, data: serde_json::Value) -> (StatusCode, Vec<u8>) {
+    let template_key: String =
+        sqlx::query_scalar("SELECT key FROM templates WHERE description = 'Z-Report'")
+            .fetch_one(&app.db)
+            .await
+            .expect("z-report template should be synced from disk by spawn_app");
+    let response = app
+        .router
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/render/{template_key}"))
+                .header("X-Internal-Api-Key", &app.config.internal_api_key)
+                .header("Content-Type", "application/json")
+                .body(Body::from(serde_json::to_vec(&data).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let status = response.status();
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap()
+        .to_vec();
+    (status, body)
+}
+
+#[tokio::test]
+async fn render_z_report_returns_pdf_and_records_document() {
+    let app = common::spawn_app().await;
+    let (status, pdf) = render_z_report(&app, sample_z_report_data()).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(pdf.starts_with(b"%PDF-"), "not a PDF");
+
+    let recorded: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM documents")
+        .fetch_one(&app.db)
+        .await
+        .unwrap();
+    assert_eq!(recorded, 1, "the render should be recorded");
+}
+
+#[tokio::test]
+async fn render_z_report_rejects_missing_required_fields() {
+    let app = common::spawn_app().await;
+    let (status, _) = render_z_report(&app, serde_json::json!({"sessionNumber": "SES-1"})).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+}
+
 #[tokio::test]
 async fn render_credit_note_returns_pdf_and_records_document() {
     let app = common::spawn_app().await;

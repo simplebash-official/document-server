@@ -57,6 +57,7 @@ async fn list_templates_returns_every_bundled_template_with_type_and_expected_da
             "Product Sticker Label",
             "Quotation",
             "Thermal Receipt",
+            "Z-Report",
         ]
     );
     assert!(templates.iter().all(|t| t["status"] == "published"));
@@ -101,6 +102,16 @@ async fn list_templates_returns_every_bundled_template_with_type_and_expected_da
     assert!(credit_note_tpl["data"]["items"].is_array());
     assert_eq!(credit_note_tpl["data"]["refundCashCents"], 700000);
 
+    let z_report_tpl = by_desc("Z-Report");
+    assert_eq!(z_report_tpl["type"], "document");
+    assert_eq!(z_report_tpl["kind"], "z-report");
+    assert_eq!(z_report_tpl["isDefault"], true);
+    assert_eq!(z_report_tpl["data"]["sessionNumber"], "SES-000042");
+    assert_eq!(z_report_tpl["data"]["grossSalesCents"], 1850000);
+    let z_required = z_report_tpl["dataSchema"]["required"].as_array().unwrap();
+    assert!(z_required.iter().any(|r| r == "sessionNumber"));
+    assert!(z_required.iter().any(|r| r == "cashReconciliation"));
+
     let receipt_tpl = by_desc("Thermal Receipt");
     assert_eq!(receipt_tpl["type"], "document");
     assert_eq!(receipt_tpl["data"]["invoiceNumber"], "INV-000123");
@@ -126,7 +137,7 @@ async fn list_templates_filters_by_type() {
     let (status, json) = get(&app, "/api/templates?type=document", None).await;
     assert_eq!(status, StatusCode::OK);
     let templates = json["data"]["templates"].as_array().unwrap();
-    assert_eq!(templates.len(), 6);
+    assert_eq!(templates.len(), 7);
     assert!(templates.iter().all(|t| t["type"] == "document"));
 
     let (status, json) = get(&app, "/api/templates?type=label", None).await;
