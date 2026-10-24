@@ -93,6 +93,10 @@
     "No. 124 Galle Road",
     "Colombo 03, Sri Lanka"
   ],
+  "movementSummary": [
+    { "movementType": "petty_expense", "direction": "out", "categoryName": "Tea and refreshments", "count": 2, "totalCents": 150000 },
+    { "movementType": "add_cash", "direction": "in", "categoryName": "Change float top-up", "count": 1, "totalCents": 500000 }
+  ],
   "shopPrimaryPhone": "+94 11 234 5678",
   "shopSecondaryPhone": "+94 77 123 4567",
   "generatedAt": "21 Oct 2026 18:02"

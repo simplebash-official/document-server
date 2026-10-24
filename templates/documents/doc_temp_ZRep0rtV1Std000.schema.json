@@ -112,6 +112,22 @@
         }
       }
     },
+    "movementSummary": {
+      "type": "array",
+      "description": "The shift's drawer movements totalled by kind and category (a reversed movement and its reversal cancel out). Optional: older payloads do not carry it.",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["movementType", "direction", "categoryName", "count", "totalCents"],
+        "properties": {
+          "movementType": { "type": "string" },
+          "direction": { "type": "string" },
+          "categoryName": { "type": "string" },
+          "count": { "type": "integer" },
+          "totalCents": { "type": "integer" }
+        }
+      }
+    },
     "openingNote": { "type": "string" },
     "closingNote": { "type": "string" },
     "shopTradingName": { "type": "string" },
