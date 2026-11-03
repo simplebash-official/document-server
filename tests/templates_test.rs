@@ -57,6 +57,7 @@ async fn list_templates_returns_every_bundled_template_with_type_and_expected_da
             "Product Sticker Label",
             "Quotation",
             "Thermal Receipt",
+            "Warranty Card",
             "Z-Report",
         ]
     );
@@ -112,6 +113,19 @@ async fn list_templates_returns_every_bundled_template_with_type_and_expected_da
     assert!(z_required.iter().any(|r| r == "sessionNumber"));
     assert!(z_required.iter().any(|r| r == "cashReconciliation"));
 
+    let card_tpl = by_desc("Warranty Card");
+    assert_eq!(card_tpl["type"], "document");
+    assert_eq!(card_tpl["kind"], "warranty-card");
+    assert_eq!(card_tpl["isDefault"], true);
+    assert_eq!(card_tpl["data"]["warrantyNumber"], "WTY-000128");
+    let card_required = card_tpl["dataSchema"]["required"].as_array().unwrap();
+    for field in ["paper", "warrantyNumber", "validUntil", "isVoid"] {
+        assert!(
+            card_required.iter().any(|r| r == field),
+            "{field} is required"
+        );
+    }
+
     let receipt_tpl = by_desc("Thermal Receipt");
     assert_eq!(receipt_tpl["type"], "document");
     assert_eq!(receipt_tpl["data"]["invoiceNumber"], "INV-000123");
@@ -137,7 +151,7 @@ async fn list_templates_filters_by_type() {
     let (status, json) = get(&app, "/api/templates?type=document", None).await;
     assert_eq!(status, StatusCode::OK);
     let templates = json["data"]["templates"].as_array().unwrap();
-    assert_eq!(templates.len(), 7);
+    assert_eq!(templates.len(), 8);
     assert!(templates.iter().all(|t| t["type"] == "document"));
 
     let (status, json) = get(&app, "/api/templates?type=label", None).await;

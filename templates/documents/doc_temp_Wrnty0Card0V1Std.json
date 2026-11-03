@@ -1,0 +1,30 @@
+{
+  "paper": "a5",
+  "warrantyNumber": "WTY-000128",
+  "sourceType": "product_sale",
+  "itemName": "Samsung Galaxy A15 128GB",
+  "serialNumber": "356789104512347",
+  "quantity": 1,
+  "coverageLabel": "12 months",
+  "warrantyTypeLabel": "Shop and manufacturer warranty",
+  "startsOn": "03 Nov 2026",
+  "validUntil": "02 Nov 2027",
+  "isVoid": false,
+  "replacesWarrantyNumber": "",
+  "terms": "Covers manufacturing faults. Physical damage, liquid damage and a broken seal are not covered.",
+  "generalPolicy": "Bring this card or your invoice with the item. Warranty is void if the seal is broken.",
+  "invoiceNumber": "INV-000412",
+  "purchaseDate": "03 Nov 2026",
+  "customerName": "Nimal Perera",
+  "customerPhone": "077 123 4567",
+  "shopTradingName": "Tweek PC",
+  "shopLegalName": "Tweek Computers (Pvt) Ltd",
+  "shopAddressLines": [
+    "45 Main Street",
+    "Kandy"
+  ],
+  "shopPrimaryPhone": "081 222 3344",
+  "shopSecondaryPhone": "",
+  "shopEmail": "hello@tweekpc.lk",
+  "shopWebsite": "tweekpc.lk"
+}

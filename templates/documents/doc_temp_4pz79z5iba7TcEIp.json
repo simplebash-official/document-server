@@ -21,7 +21,16 @@
       "quantity": 1,
       "unitPriceCents": 850000,
       "discountCents": 50000,
-      "totalCents": 800000
+      "totalCents": 800000,
+      "warranties": [
+        {
+          "number": "WTY-000045",
+          "subject": "Screen replacement (iPhone 14)",
+          "coverageLabel": "3 months",
+          "validUntil": "16 Nov 2026",
+          "terms": "Covers the new screen. Drops and liquid damage are not covered."
+        }
+      ]
     }
   ],
   "subtotalCents": 1100000,

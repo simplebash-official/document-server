@@ -5,6 +5,7 @@
 // sets `logo` to a local image filename before compiling; leave `logo` unset
 // in the payload. `logoWidth` is in pt.
 #import "../lib/money.typ": format-money
+#import "../lib/qrcode.typ": qrcode
 
 // Defaults keep a partial payload compiling; the schema still guards real calls.
 #let data = (invoiceNumber: "", formattedDate: "", formattedTime: "", cashierName: "", status: "", isCredit: false, copyDesignation: "", isDuplicate: false, paymentMethod: "", tenderedAmountCents: 0, items: (), subtotalCents: 0, discountCents: 0, totalCents: 0, amountInWords: "", showBankDetails: false, shopIsVatRegistered: false, shopAddressLines: ()) + sys.inputs
@@ -16,6 +17,14 @@
 #set text(font: "Noto Sans", size: 9.5pt)
 
 #let logo = opt("logo")
+// A covered line's warranties; the invoice number's QR code finds them at the shop.
+#let line-warranties(item) = item.at("warranties", default: ())
+#let has-warranty = data.items.any(item => line-warranties(item).len() > 0)
+#let warranty-note(w) = text(size: 7.5pt)[
+  Warranty #w.number#if w.subject != "" [ · #w.subject] ·
+  #w.coverageLabel, #if w.validUntil == none [no end date] else [valid until #w.validUntil]
+  #if w.terms != "" [ \ #w.terms]
+]
 
 #grid(
   columns: (auto, 1fr, auto),
@@ -53,7 +62,8 @@
   stroke: 0.5pt + gray,
   table.header[*Item*][*Qty*][*Unit*][*Discount*][*Total*],
   ..data.items.map(item => (
-    [#item.name #if item.at("sku", default: none) != none [\ #text(size: 8pt, item.sku)]],
+    [#item.name #if item.at("sku", default: none) != none [\ #text(size: 8pt, item.sku)]
+      #for w in line-warranties(item) [\ #warranty-note(w)]],
     str(item.quantity),
     format-money(item.unitPriceCents),
     format-money(item.discountCents),
@@ -84,4 +94,12 @@
   #data.at("accountName", default: "") — #data.at("accountNumber", default: "")
 ]
 #if opt("notes") != none [#v(6pt) *Notes:* #data.notes]
-#if opt("warrantyText") != none [#v(6pt) #text(size: 8pt, data.warrantyText)]
+#if opt("warrantyText") != none or has-warranty [
+  #v(6pt)
+  #grid(
+    columns: (1fr, auto),
+    column-gutter: 8pt,
+    text(size: 8pt, data.at("warrantyText", default: "")),
+    if has-warranty { align(center, [#qrcode(data.invoiceNumber, size: 20mm) #text(size: 7pt)[Warranty lookup]]) },
+  )
+]

@@ -31,7 +31,7 @@ templates today: `doc_temp_vEf0Y7jQHQj2rIuO` = "A4 Invoice" (a branded/modern la
 with an optional `logoUrl` — see below), `doc_temp_ZahcoYg8xCQjuc8c` = "A4 Invoice Modern"
 (the same input contract as A4 Invoice, a different design; its schema/sample are copies
 with only the `title` changed — keep the two contracts identical), `doc_temp_4pz79z5iba7TcEIp` = "Thermal
-Receipt", `doc_temp_5DHl8hUQTX3oLBSR` = "Credit Note", `doc_temp_Qu0tati0nV1Std00` = "Quotation" (a priced offer — no payment, cashier or tax fields; stamped CANCELLED when `isCancelled`), `lbl_temp_qklcWIolwoFFN3xk` =
+Receipt", `doc_temp_5DHl8hUQTX3oLBSR` = "Credit Note", `doc_temp_Qu0tati0nV1Std00` = "Quotation" (a priced offer — no payment, cashier or tax fields; stamped CANCELLED when `isCancelled`), `doc_temp_Wrnty0Card0V1Std` = "Warranty Card" (kind `warranty-card`: one warranty on an A5 sheet or a 58/80 mm roll by `paper`, fixed English labels with Sinhala beside them, a QR code of `warrantyNumber`; `validUntil` is `null` for a lifetime warranty), `lbl_temp_qklcWIolwoFFN3xk` =
 "Product Sticker Label" (**data-driven**: the payload carries the label layout — size plus absolutely placed text/barcode/QR/line elements — and the stickers to print, one page each; the POS backend stores shop-designed layouts and renders them through this one template, so there is no private override of it).
 
 Both A4 invoices' `logoUrl` field accepts an **http(s) URL** (downloaded at render
@@ -53,7 +53,7 @@ Two schema keys are mandatory on every template: **`x-document-kind`** and — o
 
 Every `documents/*.schema.json` declares what the template is *for* with a top-level
 `"x-document-kind"` (unknown keywords are harmless annotations to the `jsonschema` validator;
-the marker rides along in `dataSchema` on `GET /api/templates`). Kinds in use: `a4-invoice`, `thermal-receipt`, `credit-note`, `quotation`, `z-report`, `analytics-report`, `product-label`. SimpleBash POS's backend lists the
+the marker rides along in `dataSchema` on `GET /api/templates`). Kinds in use: `a4-invoice`, `thermal-receipt`, `credit-note`, `quotation`, `z-report`, `warranty-card`, `analytics-report`, `product-label`. SimpleBash POS's backend lists the
 **published** templates of a kind in its "Document Designs" dropdowns (Settings and the print
 preview), shows each schema `title` as the label, and renders the template's `.json` sample
 as the preview — so a new template needs no backend or frontend change.
@@ -70,6 +70,8 @@ Rules that keep that safe (guarded by `tests/templates_test.rs` and, in the back
   expect the backend to drop it for previews.
 - The list endpoint returns only the latest published version of each design the tenant may
   use, sorted by title.
+
+**Warranties on invoice lines** (both A4 designs and the receipt): an item may carry an optional `warranties` array of `{number, subject, coverageLabel, validUntil (string | null = lifetime), terms}`; every design prints them under the line and, when any line has one, a QR code of `invoiceNumber` (the POS warranty lookup accepts an invoice number). Keep that field optional.
 
 **A4 invoice payment fields** (both A4 designs follow the same reading): `tenderedAmountCents` is the money the customer handed over (the total when nothing was recorded), `changeDueCents` the change given back, `amountPaidCents` what has been paid so far, `balanceDueCents` what is still owed. A design's **Total Due is `balanceDueCents`** — 0.00 on a paid invoice, never the invoice total (that is the Grand Total); a voided invoice shows 0.00.
 

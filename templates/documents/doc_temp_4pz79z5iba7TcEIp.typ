@@ -2,6 +2,7 @@
 // (worked example in the sibling .json). 58 mm or 80 mm roll via paperWidthMm.
 #import "../lib/codes.typ": barcode
 #import "../lib/money.typ": format-money
+#import "../lib/qrcode.typ": qrcode
 
 // Defaults keep a partial payload compiling; the schema still guards real calls.
 #let data = (paperWidthMm: 80, invoiceNumber: "", formattedDate: "", formattedTime: "", cashierName: "", items: (), subtotalCents: 0, discountCents: 0, totalCents: 0, paymentMethod: "", isCredit: false, shopTradingName: "", shopLegalName: "", shopAddressLines: ()) + sys.inputs
@@ -13,6 +14,13 @@
 #set text(font: "Noto Sans", size: 8.5pt)
 
 #let row(left, right) = grid(columns: (1fr, auto), left, right)
+// A covered line's warranties; the invoice number's QR code finds them at the shop.
+#let line-warranties(item) = item.at("warranties", default: ())
+#let has-warranty = data.items.any(item => line-warranties(item).len() > 0)
+#let warranty-note(w) = text(size: 7pt)[
+  Warranty #w.number#if w.subject != "" [ · #w.subject] \
+  #w.coverageLabel · #if w.validUntil == none [no end date] else [valid until #w.validUntil]
+]
 
 #align(center)[
   #text(size: 11pt, strong(data.shopTradingName)) \
@@ -31,6 +39,7 @@ Cashier: #data.cashierName
   #item.name \
   #row[#item.quantity x #format-money(item.unitPriceCents)][#format-money(item.totalCents)]
   #if item.discountCents > 0 [#row[Discount][-#format-money(item.discountCents)]]
+  #for w in line-warranties(item) [#warranty-note(w) \ ]
 ]
 #line(length: 100%)
 #row[Subtotal][#format-money(data.subtotalCents)]
@@ -54,6 +63,10 @@ Cashier: #data.cashierName
 #v(4pt)
 #align(center)[
   #barcode(data.invoiceNumber, height: 8mm, show-text: false)
+  #if has-warranty [
+    #qrcode(data.invoiceNumber, size: 18mm) \
+    #text(size: 7pt)[Bring this receipt for warranty. Scan at the shop.] \
+  ]
   #if opt("warrantyText") != none [#text(size: 7pt, data.warrantyText) \ ]
   #data.at("footerText", default: "Thank you!")
 ]

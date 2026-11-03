@@ -1324,3 +1324,122 @@ async fn render_analytics_report_missing_kpis_is_rejected_by_schema() {
     assert_eq!(json["code"], "RENDER_VALIDATION_FAILED");
     assert!(json["message"].as_str().unwrap().contains("kpis"));
 }
+
+fn sample_warranty_card_data() -> serde_json::Value {
+    let path = std::path::Path::new("templates/documents/doc_temp_Wrnty0Card0V1Std.json");
+    serde_json::from_str(&std::fs::read_to_string(path).expect("warranty card sample exists"))
+        .expect("warranty card sample is JSON")
+}
+
+async fn render_by_description(
+    app: &common::TestApp,
+    description: &str,
+    data: serde_json::Value,
+) -> (StatusCode, Vec<u8>) {
+    let template_key: String =
+        sqlx::query_scalar("SELECT key FROM templates WHERE description = ?")
+            .bind(description)
+            .fetch_one(&app.db)
+            .await
+            .expect("bundled template should be synced from disk by spawn_app");
+    let response = app
+        .router
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/render/{template_key}"))
+                .header("X-Internal-Api-Key", &app.config.internal_api_key)
+                .header("Content-Type", "application/json")
+                .body(Body::from(serde_json::to_vec(&data).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let status = response.status();
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap()
+        .to_vec();
+    (status, body)
+}
+
+#[tokio::test]
+async fn warranty_card_renders_on_every_paper_including_lifetime_and_void() {
+    let app = common::spawn_app().await;
+    for paper in ["a5", "thermal-58", "thermal-80"] {
+        let mut data = sample_warranty_card_data();
+        data["paper"] = serde_json::json!(paper);
+        let (status, pdf) = render_by_description(&app, "Warranty Card", data.clone()).await;
+        assert_eq!(status, StatusCode::OK, "{paper}");
+        assert!(pdf.starts_with(b"%PDF-"), "{paper}: not a PDF");
+
+        // A lifetime warranty has no end date; a voided one is stamped.
+        data["validUntil"] = serde_json::Value::Null;
+        data["isVoid"] = serde_json::json!(true);
+        data["sourceType"] = serde_json::json!("repair");
+        let (status, _) = render_by_description(&app, "Warranty Card", data).await;
+        assert_eq!(status, StatusCode::OK, "{paper} lifetime/void");
+    }
+}
+
+#[tokio::test]
+async fn warranty_card_rejects_an_unknown_paper_and_missing_fields() {
+    let app = common::spawn_app().await;
+    let mut data = sample_warranty_card_data();
+    data["paper"] = serde_json::json!("a4");
+    let (status, _) = render_by_description(&app, "Warranty Card", data).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+
+    let (status, _) = render_by_description(
+        &app,
+        "Warranty Card",
+        serde_json::json!({"paper": "a5", "warrantyNumber": "WTY-1"}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+}
+
+#[tokio::test]
+async fn invoice_and_receipt_lines_accept_warranties_and_check_their_shape() {
+    let app = common::spawn_app().await;
+    for description in ["A4 Invoice", "A4 Invoice Modern", "Thermal Receipt"] {
+        let template_name: String =
+            sqlx::query_scalar("SELECT name FROM templates WHERE description = ?")
+                .bind(description)
+                .fetch_one(&app.db)
+                .await
+                .expect("bundled template is synced");
+        let path = format!("templates/documents/{template_name}.json");
+        let mut data: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(path).expect("sample exists"))
+                .expect("sample is JSON");
+        data.as_object_mut()
+            .expect("sample is an object")
+            .remove("logoUrl");
+        assert!(
+            data["items"][1]["warranties"].is_array(),
+            "{description}: the sample shows a warranty"
+        );
+        let (status, pdf) = render_by_description(&app, description, data.clone()).await;
+        assert_eq!(status, StatusCode::OK, "{description}");
+        assert!(pdf.starts_with(b"%PDF-"));
+
+        // A lifetime warranty prints with no end date.
+        data["items"][1]["warranties"][0]["validUntil"] = serde_json::Value::Null;
+        let (status, _) = render_by_description(&app, description, data.clone()).await;
+        assert_eq!(status, StatusCode::OK, "{description} lifetime");
+
+        // A note without its number is refused.
+        data["items"][1]["warranties"][0]
+            .as_object_mut()
+            .expect("a note is an object")
+            .remove("number");
+        let (status, _) = render_by_description(&app, description, data).await;
+        assert_eq!(
+            status,
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "{description} bad note"
+        );
+    }
+}

@@ -67,7 +67,23 @@
           "quantity": { "type": "integer", "minimum": 1 },
           "unitPriceCents": { "type": "integer" },
           "discountCents": { "type": "integer" },
-          "totalCents": { "type": "integer" }
+          "totalCents": { "type": "integer" },
+          "warranties": {
+            "type": "array",
+            "description": "Optional: this line's warranties (one per serial or repair item). A document with any prints a QR code of invoiceNumber, which the warranty lookup accepts.",
+            "items": {
+              "type": "object",
+              "additionalProperties": true,
+              "required": ["number", "subject", "coverageLabel", "validUntil", "terms"],
+              "properties": {
+                "number": { "type": "string", "description": "WTY-000001" },
+                "subject": { "type": "string", "description": "Which unit or work it covers when a line has several: the serial, or the repair work; \"\" otherwise." },
+                "coverageLabel": { "type": "string", "description": "12 months, 1 year, Lifetime." },
+                "validUntil": { "type": ["string", "null"], "description": "Last covered day (02 Nov 2027); null for a lifetime warranty." },
+                "terms": { "type": "string", "description": "The item's own warranty terms; \"\" for none." }
+              }
+            }
+          }
         }
       }
     },

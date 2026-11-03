@@ -1,0 +1,147 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Warranty Card",
+  "x-document-kind": "warranty-card",
+  "x-default": true,
+  "description": "Input contract for the Warranty Card template: one warranty, printed on A5 or on a 58/80 mm receipt roll (`paper`). Strings that do not apply are \"\". See the sibling .json for a worked example.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "paper",
+    "warrantyNumber",
+    "sourceType",
+    "itemName",
+    "serialNumber",
+    "quantity",
+    "coverageLabel",
+    "warrantyTypeLabel",
+    "startsOn",
+    "validUntil",
+    "isVoid",
+    "replacesWarrantyNumber",
+    "terms",
+    "generalPolicy",
+    "invoiceNumber",
+    "purchaseDate",
+    "customerName",
+    "customerPhone",
+    "shopTradingName",
+    "shopLegalName",
+    "shopAddressLines",
+    "shopPrimaryPhone",
+    "shopSecondaryPhone",
+    "shopEmail",
+    "shopWebsite"
+  ],
+  "properties": {
+    "paper": {
+      "type": "string",
+      "enum": [
+        "a5",
+        "thermal-58",
+        "thermal-80"
+      ],
+      "description": "A5 sheet or a 58/80 mm receipt roll."
+    },
+    "logoUrl": {
+      "type": "string",
+      "description": "Shop logo as an http(s) URL or data: URI; \"\" for none."
+    },
+    "logoWidth": {
+      "type": "number"
+    },
+    "warrantyNumber": {
+      "type": "string",
+      "description": "WTY-000001; also printed as a QR code staff scan into the warranty lookup."
+    },
+    "sourceType": {
+      "type": "string",
+      "enum": [
+        "product_sale",
+        "repair"
+      ]
+    },
+    "itemName": {
+      "type": "string"
+    },
+    "serialNumber": {
+      "type": "string",
+      "description": "Serial or IMEI; for repair work the customer's device."
+    },
+    "quantity": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "coverageLabel": {
+      "type": "string",
+      "description": "12 months, 1 year, Lifetime."
+    },
+    "warrantyTypeLabel": {
+      "type": "string",
+      "description": "Shop warranty, Manufacturer warranty, or Shop and manufacturer warranty."
+    },
+    "startsOn": {
+      "type": "string",
+      "description": "First covered day, e.g. 03 Nov 2026."
+    },
+    "validUntil": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Last covered day; null for a lifetime warranty."
+    },
+    "isVoid": {
+      "type": "boolean",
+      "description": "The warranty was cancelled; the card is stamped VOID."
+    },
+    "replacesWarrantyNumber": {
+      "type": "string",
+      "description": "The warranty a replacement unit took over from."
+    },
+    "terms": {
+      "type": "string",
+      "description": "This item's own warranty terms."
+    },
+    "generalPolicy": {
+      "type": "string",
+      "description": "The shop's general warranty policy."
+    },
+    "invoiceNumber": {
+      "type": "string"
+    },
+    "purchaseDate": {
+      "type": "string"
+    },
+    "customerName": {
+      "type": "string"
+    },
+    "customerPhone": {
+      "type": "string"
+    },
+    "shopTradingName": {
+      "type": "string"
+    },
+    "shopLegalName": {
+      "type": "string"
+    },
+    "shopAddressLines": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "shopPrimaryPhone": {
+      "type": "string"
+    },
+    "shopSecondaryPhone": {
+      "type": "string"
+    },
+    "shopEmail": {
+      "type": "string"
+    },
+    "shopWebsite": {
+      "type": "string"
+    }
+  }
+}
