@@ -32,7 +32,7 @@ git -C pos/desktop submodule status
 
 ## Local Docker: never let a compose build replace the private designs
 
-The local stack (`docker-compose.local.yml` at the workspace root) must run the document-server with the **real private designs**. A plain compose build copies only this repo's public example templates (the A4 invoice is 87 lines instead of 434) and silently downgrades every local invoice, receipt and quotation.
+The local stack (`docker-compose.local.yml` at the workspace root) must run the document-server with the **real private designs**. A plain compose build copies only this repo's public example templates (the A4 invoice is 87 lines instead of the private 459) and silently downgrades every local invoice, receipt and quotation.
 
 - **Trap:** `up --build backend` (or any service that depends on `document-server`) rebuilds the document-server image from the public templates too, overwriting the `ghcr.io/simplebash-official/document-server:latest` tag and recreating the container. So this applies to *any* local rebuild, not only to document-server changes.
 - **Correct order:** build the private-overlay image *after* the compose build and recreate the container with `--no-build`:
@@ -40,7 +40,7 @@ The local stack (`docker-compose.local.yml` at the workspace root) must run the 
   2. `<scratch>/scripts/assemble-templates.sh pos/document-templates <scratch>/templates` (never write private `.typ` files into this repo);
   3. `docker build -t ghcr.io/simplebash-official/document-server:latest <scratch>`;
   4. `docker compose -f docker-compose.local.yml --env-file .env.docker.local up -d --no-build document-server`.
-- **Check every time:** `docker exec simplebash-document-server wc -l /app/templates/documents/doc_temp_vEf0Y7jQHQj2rIuO.typ` must print 434 (public example: 87), then `./scripts/local-docker.sh verify`.
+- **Check every time:** `docker exec simplebash-document-server wc -l /app/templates/documents/doc_temp_vEf0Y7jQHQj2rIuO.typ` must print the same count as `pos/document-templates/documents/doc_temp_vEf0Y7jQHQj2rIuO.typ` (459 today; public example: 87), then `./scripts/local-docker.sh verify`.
 - **Data:** published template packages live in the `document_packages` volume (`/app/templates/packages`) and the SQLite database in `document_data`; `docker compose down -v` deletes both. The first boot after the packages change migrates the `templates` table in place, so copy `/app/data/document_server.db` out of the container before a risky rebuild.
 
 ## Before finishing any task: test everything that can be tested
