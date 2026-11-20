@@ -1400,6 +1400,57 @@ async fn warranty_card_rejects_an_unknown_paper_and_missing_fields() {
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
 }
 
+fn sample_job_receipt_data() -> serde_json::Value {
+    let path = std::path::Path::new("templates/documents/doc_temp_JobRcpt0V1Std000.json");
+    serde_json::from_str(&std::fs::read_to_string(path).expect("job receipt sample exists"))
+        .expect("job receipt sample is JSON")
+}
+
+#[tokio::test]
+async fn job_receipt_renders_on_every_paper_with_and_without_the_optional_parts() {
+    let app = common::spawn_app().await;
+    for paper in ["a5", "thermal-58", "thermal-80"] {
+        let mut data = sample_job_receipt_data();
+        data["paper"] = serde_json::json!(paper);
+        let (status, pdf) = render_by_description(&app, "Job Receipt", data.clone()).await;
+        assert_eq!(status, StatusCode::OK, "{paper}");
+        assert!(pdf.starts_with(b"%PDF-"), "{paper}: not a PDF");
+
+        // A print job with nothing quoted, no terms, no pickup warning and no ready-by day.
+        data["jobKind"] = serde_json::json!("print");
+        data["serialNumber"] = serde_json::json!("");
+        data["itemLines"] = serde_json::json!([]);
+        data["estimateCents"] = serde_json::Value::Null;
+        data["promisedReadyOn"] = serde_json::Value::Null;
+        data["termsText"] = serde_json::json!("");
+        data["uncollectedAfterDays"] = serde_json::Value::Null;
+        let (status, _) = render_by_description(&app, "Job Receipt", data.clone()).await;
+        assert_eq!(status, StatusCode::OK, "{paper} bare print job");
+
+        // Free warranty rework.
+        data["isWarrantyRework"] = serde_json::json!(true);
+        let (status, _) = render_by_description(&app, "Job Receipt", data).await;
+        assert_eq!(status, StatusCode::OK, "{paper} rework");
+    }
+}
+
+#[tokio::test]
+async fn job_receipt_rejects_an_unknown_paper_and_missing_fields() {
+    let app = common::spawn_app().await;
+    let mut data = sample_job_receipt_data();
+    data["paper"] = serde_json::json!("a4");
+    let (status, _) = render_by_description(&app, "Job Receipt", data).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+
+    let (status, _) = render_by_description(
+        &app,
+        "Job Receipt",
+        serde_json::json!({"paper": "a5", "ticketNumber": "REP-1"}),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+}
+
 #[tokio::test]
 async fn invoice_and_receipt_lines_accept_warranties_and_check_their_shape() {
     let app = common::spawn_app().await;

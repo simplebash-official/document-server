@@ -54,6 +54,7 @@ async fn list_templates_returns_every_bundled_template_with_type_and_expected_da
             "A4 Invoice Modern",
             "Analytics Report",
             "Credit Note",
+            "Job Receipt",
             "Product Sticker Label",
             "Quotation",
             "Thermal Receipt",
@@ -126,6 +127,26 @@ async fn list_templates_returns_every_bundled_template_with_type_and_expected_da
         );
     }
 
+    let job_receipt_tpl = by_desc("Job Receipt");
+    assert_eq!(job_receipt_tpl["type"], "document");
+    assert_eq!(job_receipt_tpl["kind"], "job-receipt");
+    assert_eq!(job_receipt_tpl["isDefault"], true);
+    assert_eq!(job_receipt_tpl["data"]["ticketNumber"], "REP-000123");
+    let job_receipt_required = job_receipt_tpl["dataSchema"]["required"]
+        .as_array()
+        .unwrap();
+    for field in [
+        "paper",
+        "ticketNumber",
+        "estimateCents",
+        "uncollectedAfterDays",
+    ] {
+        assert!(
+            job_receipt_required.iter().any(|r| r == field),
+            "{field} is required"
+        );
+    }
+
     let receipt_tpl = by_desc("Thermal Receipt");
     assert_eq!(receipt_tpl["type"], "document");
     assert_eq!(receipt_tpl["data"]["invoiceNumber"], "INV-000123");
@@ -151,7 +172,7 @@ async fn list_templates_filters_by_type() {
     let (status, json) = get(&app, "/api/templates?type=document", None).await;
     assert_eq!(status, StatusCode::OK);
     let templates = json["data"]["templates"].as_array().unwrap();
-    assert_eq!(templates.len(), 8);
+    assert_eq!(templates.len(), 9);
     assert!(templates.iter().all(|t| t["type"] == "document"));
 
     let (status, json) = get(&app, "/api/templates?type=label", None).await;

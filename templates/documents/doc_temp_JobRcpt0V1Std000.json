@@ -1,0 +1,32 @@
+{
+  "paper": "a5",
+  "ticketNumber": "REP-000123",
+  "jobKind": "repair",
+  "receivedOn": "20 Nov 2026",
+  "receivedAt": "14:35",
+  "customerName": "Nimal Perera",
+  "customerPhone": "077 123 4567",
+  "title": "Samsung Galaxy A15",
+  "detail": "Screen cracked after a fall. Phone turns on but the touch does not work.",
+  "serialNumber": "356789104512347",
+  "itemLines": [
+    "Replace display",
+    "Clean charging port"
+  ],
+  "estimateCents": 1850000,
+  "promisedReadyOn": "27 Nov 2026",
+  "isWarrantyRework": false,
+  "qrData": "REP-000123",
+  "termsText": "Please keep this receipt and bring it when you collect the item. We are not responsible for data on the device. Items are checked before they are handed back.",
+  "uncollectedAfterDays": 30,
+  "shopTradingName": "Tweek PC",
+  "shopLegalName": "Tweek Computers (Pvt) Ltd",
+  "shopAddressLines": [
+    "45 Main Street",
+    "Kandy"
+  ],
+  "shopPrimaryPhone": "081 222 3344",
+  "shopSecondaryPhone": "",
+  "shopEmail": "hello@tweekpc.lk",
+  "shopWebsite": "tweekpc.lk"
+}
