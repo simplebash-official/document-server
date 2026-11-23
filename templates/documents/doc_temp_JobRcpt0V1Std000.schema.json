@@ -1,0 +1,122 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Job Receipt",
+  "x-document-kind": "job-receipt",
+  "x-default": true,
+  "description": "Input contract for the Job Receipt template: the slip a customer gets when the shop receives a repair or a print job, on A5 or a 58/80 mm receipt roll (`paper`). Strings that do not apply are \"\". See the sibling .json for a worked example.",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "paper",
+    "ticketNumber",
+    "jobKind",
+    "receivedOn",
+    "receivedAt",
+    "customerName",
+    "customerPhone",
+    "title",
+    "detail",
+    "serialNumber",
+    "itemLines",
+    "estimateCents",
+    "promisedReadyOn",
+    "isWarrantyRework",
+    "qrData",
+    "termsText",
+    "uncollectedAfterDays",
+    "shopTradingName",
+    "shopLegalName",
+    "shopAddressLines",
+    "shopPrimaryPhone",
+    "shopSecondaryPhone",
+    "shopEmail",
+    "shopWebsite"
+  ],
+  "properties": {
+    "paper": {
+      "type": "string",
+      "enum": ["a5", "thermal-58", "thermal-80"],
+      "description": "A5 sheet or a 58/80 mm receipt roll."
+    },
+    "logoUrl": {
+      "type": "string",
+      "description": "Shop logo as an http(s) URL or data: URI; \"\" for none."
+    },
+    "logoWidth": {
+      "type": "number"
+    },
+    "ticketNumber": {
+      "type": "string",
+      "description": "REP-000123 or PRN-000045."
+    },
+    "jobKind": {
+      "type": "string",
+      "enum": ["repair", "print"]
+    },
+    "receivedOn": {
+      "type": "string",
+      "description": "The day the job was received, e.g. 20 Nov 2026."
+    },
+    "receivedAt": {
+      "type": "string",
+      "description": "The time the job was received, e.g. 14:35."
+    },
+    "customerName": {
+      "type": "string"
+    },
+    "customerPhone": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string",
+      "description": "Repair: the device. Print job: the kind of print."
+    },
+    "detail": {
+      "type": "string",
+      "description": "Repair: what the customer reported. Print job: the quantity and kind of print."
+    },
+    "serialNumber": {
+      "type": "string",
+      "description": "The device's serial or IMEI; \"\" when none."
+    },
+    "itemLines": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Repair: the work planned, one line each. Print job: empty."
+    },
+    "estimateCents": {
+      "type": ["integer", "null"],
+      "description": "The estimate in cents; null while nothing is quoted."
+    },
+    "promisedReadyOn": {
+      "type": ["string", "null"],
+      "description": "The promised ready day, e.g. 27 Nov 2026; null when none."
+    },
+    "isWarrantyRework": {
+      "type": "boolean",
+      "description": "A free rework job opened from a warranty claim; the estimate prints as No charge."
+    },
+    "qrData": {
+      "type": "string",
+      "description": "What the QR code holds: the ticket number, which the till's scan box accepts."
+    },
+    "termsText": {
+      "type": "string",
+      "description": "The shop's terms for jobs; \"\" prints none."
+    },
+    "uncollectedAfterDays": {
+      "type": ["integer", "null"],
+      "description": "Days after which an uncollected job may be disposed of; null prints no warning."
+    },
+    "shopTradingName": { "type": "string" },
+    "shopLegalName": { "type": "string" },
+    "shopAddressLines": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "shopPrimaryPhone": { "type": "string" },
+    "shopSecondaryPhone": { "type": "string" },
+    "shopEmail": { "type": "string" },
+    "shopWebsite": { "type": "string" }
+  }
+}

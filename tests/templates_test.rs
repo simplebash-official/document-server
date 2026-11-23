@@ -54,6 +54,7 @@ async fn list_templates_returns_every_bundled_template_with_type_and_expected_da
             "A4 Invoice Modern",
             "Analytics Report",
             "Credit Note",
+            "Job Receipt",
             "Product Sticker Label",
             "Quotation",
             "Thermal Receipt",
@@ -151,7 +152,7 @@ async fn list_templates_filters_by_type() {
     let (status, json) = get(&app, "/api/templates?type=document", None).await;
     assert_eq!(status, StatusCode::OK);
     let templates = json["data"]["templates"].as_array().unwrap();
-    assert_eq!(templates.len(), 8);
+    assert_eq!(templates.len(), 9);
     assert!(templates.iter().all(|t| t["type"] == "document"));
 
     let (status, json) = get(&app, "/api/templates?type=label", None).await;
