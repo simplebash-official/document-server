@@ -7,16 +7,17 @@
   "customerName": "Nimal Perera",
   "customerPhone": "077 123 4567",
   "title": "Samsung Galaxy A15",
-  "detail": "Screen cracked after a fall.",
+  "detail": "Screen cracked after a fall. Phone turns on but the touch does not work.",
   "serialNumber": "356789104512347",
   "itemLines": [
-    "Replace display"
+    "Replace display",
+    "Clean charging port"
   ],
   "estimateCents": 1850000,
   "promisedReadyOn": "27 Nov 2026",
   "isWarrantyRework": false,
   "qrData": "REP-000123",
-  "termsText": "Keep this slip and bring it when you collect the item.",
+  "termsText": "Please keep this receipt and bring it when you collect the item. We are not responsible for data on the device. Items are checked before they are handed back.",
   "uncollectedAfterDays": 30,
   "shopTradingName": "Tweek PC",
   "shopLegalName": "Tweek Computers (Pvt) Ltd",

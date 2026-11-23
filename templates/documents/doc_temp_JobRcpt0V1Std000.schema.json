@@ -3,7 +3,7 @@
   "title": "Job Receipt",
   "x-document-kind": "job-receipt",
   "x-default": true,
-  "description": "Input contract for the Job Receipt template: the slip a customer gets when the shop receives a repair or a print job, on A5 or a 58/80 mm receipt roll (`paper`). Strings that do not apply are \"\". See the sibling .json for a worked example.",
+  "description": "Input contract for the Job Receipt template: the slip a customer gets when the shop receives a repair or a print job, printed on A5 or on a 58/80 mm receipt roll (`paper`). Strings that do not apply are \"\"; a figure or date that does not apply is null. See the sibling .json for a worked example.",
   "type": "object",
   "additionalProperties": true,
   "required": [
@@ -35,7 +35,11 @@
   "properties": {
     "paper": {
       "type": "string",
-      "enum": ["a5", "thermal-58", "thermal-80"],
+      "enum": [
+        "a5",
+        "thermal-58",
+        "thermal-80"
+      ],
       "description": "A5 sheet or a 58/80 mm receipt roll."
     },
     "logoUrl": {
@@ -47,19 +51,22 @@
     },
     "ticketNumber": {
       "type": "string",
-      "description": "REP-000123 or PRN-000045."
+      "description": "REP-000123 or PRN-000123; the customer quotes it and it is printed as a QR code the till scans."
     },
     "jobKind": {
       "type": "string",
-      "enum": ["repair", "print"]
+      "enum": [
+        "repair",
+        "print"
+      ]
     },
     "receivedOn": {
       "type": "string",
-      "description": "The day the job was received, e.g. 20 Nov 2026."
+      "description": "The day the job was received in the shop's own time zone, e.g. 20 Nov 2026."
     },
     "receivedAt": {
       "type": "string",
-      "description": "The time the job was received, e.g. 14:35."
+      "description": "The time the job was received in the shop's own time zone, e.g. 14:35."
     },
     "customerName": {
       "type": "string"
@@ -73,50 +80,77 @@
     },
     "detail": {
       "type": "string",
-      "description": "Repair: what the customer reported. Print job: the quantity and kind of print."
+      "description": "Repair: what the customer reported. Print job: the quantity and kind, e.g. 20 × Mug."
     },
     "serialNumber": {
       "type": "string",
-      "description": "The device's serial or IMEI; \"\" when none."
+      "description": "Serial number or IMEI of the device; \"\" for none and for print jobs."
     },
     "itemLines": {
       "type": "array",
-      "items": { "type": "string" },
-      "description": "Repair: the work planned, one line each. Print job: empty."
+      "items": {
+        "type": "string"
+      },
+      "description": "Repair: what the shop plans to do, one line per piece of work. Print job: empty."
     },
     "estimateCents": {
-      "type": ["integer", "null"],
-      "description": "The estimate in cents; null while nothing is quoted."
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0,
+      "description": "The estimate in cents; null when nothing is quoted yet."
     },
     "promisedReadyOn": {
-      "type": ["string", "null"],
-      "description": "The promised ready day, e.g. 27 Nov 2026; null when none."
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "The day the shop promised the job would be ready, e.g. 27 Nov 2026; null when none was agreed."
     },
     "isWarrantyRework": {
       "type": "boolean",
-      "description": "A free rework job opened from a warranty claim; the estimate prints as No charge."
+      "description": "Free work redoing an earlier job under its warranty; the slip says there is no charge."
     },
     "qrData": {
       "type": "string",
-      "description": "What the QR code holds: the ticket number, which the till's scan box accepts."
+      "description": "What the QR code holds: the ticket number."
     },
     "termsText": {
       "type": "string",
-      "description": "The shop's terms for jobs; \"\" prints none."
+      "description": "The shop's terms for received jobs; \"\" prints none."
     },
     "uncollectedAfterDays": {
-      "type": ["integer", "null"],
-      "description": "Days after which an uncollected job may be disposed of; null prints no warning."
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1,
+      "description": "Days after which the shop is no longer responsible for an uncollected job; null prints no warning."
     },
-    "shopTradingName": { "type": "string" },
-    "shopLegalName": { "type": "string" },
+    "shopTradingName": {
+      "type": "string"
+    },
+    "shopLegalName": {
+      "type": "string"
+    },
     "shopAddressLines": {
       "type": "array",
-      "items": { "type": "string" }
+      "items": {
+        "type": "string"
+      }
     },
-    "shopPrimaryPhone": { "type": "string" },
-    "shopSecondaryPhone": { "type": "string" },
-    "shopEmail": { "type": "string" },
-    "shopWebsite": { "type": "string" }
+    "shopPrimaryPhone": {
+      "type": "string"
+    },
+    "shopSecondaryPhone": {
+      "type": "string"
+    },
+    "shopEmail": {
+      "type": "string"
+    },
+    "shopWebsite": {
+      "type": "string"
+    }
   }
 }
