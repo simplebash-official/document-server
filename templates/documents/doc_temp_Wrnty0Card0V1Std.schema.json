@@ -58,7 +58,8 @@
       "type": "string",
       "enum": [
         "product_sale",
-        "repair"
+        "repair",
+        "print"
       ]
     },
     "itemName": {
@@ -66,7 +67,7 @@
     },
     "serialNumber": {
       "type": "string",
-      "description": "Serial or IMEI; for repair work the customer's device."
+      "description": "Serial or IMEI; for repair work the customer's device, for print work the part's."
     },
     "quantity": {
       "type": "integer",

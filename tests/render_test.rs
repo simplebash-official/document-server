@@ -1377,9 +1377,11 @@ async fn warranty_card_renders_on_every_paper_including_lifetime_and_void() {
         // A lifetime warranty has no end date; a voided one is stamped.
         data["validUntil"] = serde_json::Value::Null;
         data["isVoid"] = serde_json::json!(true);
-        data["sourceType"] = serde_json::json!("repair");
-        let (status, _) = render_by_description(&app, "Warranty Card", data).await;
-        assert_eq!(status, StatusCode::OK, "{paper} lifetime/void");
+        for source in ["repair", "print"] {
+            data["sourceType"] = serde_json::json!(source);
+            let (status, _) = render_by_description(&app, "Warranty Card", data.clone()).await;
+            assert_eq!(status, StatusCode::OK, "{paper} lifetime/void {source}");
+        }
     }
 }
 

@@ -5,7 +5,7 @@
 #import "../lib/qrcode.typ": qrcode
 
 // Defaults keep a partial payload compiling; the schema still guards real calls.
-#let data = (paper: "a5", warrantyNumber: "", itemName: "", serialNumber: "", quantity: 1, coverageLabel: "", warrantyTypeLabel: "", startsOn: "", validUntil: none, isVoid: false, replacesWarrantyNumber: "", terms: "", generalPolicy: "", invoiceNumber: "", purchaseDate: "", customerName: "", customerPhone: "", shopTradingName: "", shopAddressLines: ()) + sys.inputs
+#let data = (paper: "a5", warrantyNumber: "", sourceType: "product_sale", itemName: "", serialNumber: "", quantity: 1, coverageLabel: "", warrantyTypeLabel: "", startsOn: "", validUntil: none, isVoid: false, replacesWarrantyNumber: "", terms: "", generalPolicy: "", invoiceNumber: "", purchaseDate: "", customerName: "", customerPhone: "", shopTradingName: "", shopAddressLines: ()) + sys.inputs
 #let opt(key) = { let v = data.at(key, default: none); if v == "" { none } else { v } }
 #let thermal = data.paper != "a5"
 
@@ -40,7 +40,7 @@
   columns: (auto, 1fr),
   column-gutter: 8pt,
   row-gutter: 6pt,
-  ..field("Item", "බඩුව", [#data.itemName #if data.quantity > 1 [× #data.quantity]]),
+  ..field(if data.sourceType == "print" { "Print work" } else { "Item" }, if data.sourceType == "print" { "ප්‍රින්ට් වැඩ" } else { "බඩුව" }, [#data.itemName #if data.quantity > 1 [× #data.quantity]]),
   ..if opt("serialNumber") != none { field("Serial / IMEI", "Serial / IMEI අංකය", raw(data.serialNumber)) },
   ..if opt("customerName") != none { field("Customer", "කස්ටමර්", [#data.customerName #if opt("customerPhone") != none [· #data.customerPhone]]) },
   ..field("Invoice", "බිල", [#data.invoiceNumber · #data.purchaseDate]),
