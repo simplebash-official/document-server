@@ -43,32 +43,34 @@ The local stack (`pos/deployment/docker-compose.local.yml`) must run the documen
 - **Check every time:** `docker exec simplebash-document-server wc -l /app/templates/documents/doc_temp_vEf0Y7jQHQj2rIuO.typ` must print the same count as `pos/document-templates/documents/doc_temp_vEf0Y7jQHQj2rIuO.typ` (459 today; public example: 87), then `./scripts/local-docker.sh verify`.
 - **Data:** published template packages live in the `document_packages` volume (`/app/templates/packages`) and the SQLite database in `document_data`; `docker compose down -v` deletes both. The first boot after the packages change migrates the `templates` table in place, so copy `/app/data/document_server.db` out of the container before a risky rebuild.
 
-## Before finishing any task: test everything that can be tested
+## Testing: related tests while working, the full gate before a push
 
-A task is not done until everything in this codebase that *can* be tested, and everything related to the feature you implemented, has been tested and passes. Not just the lines you changed.
+### While working (every task)
 
-1. **The feature itself:** add or extend automated tests for every behaviour you added or changed (happy path, failure paths, edge cases), then run them.
-2. **Everything around it:** run this repo's full suite and quality gates (below), not only the new tests. A change can break a caller far away.
-3. **Across repos:** when a feature spans repos (backend, frontend, desktop shell, document-server, identity-server, app-frontend, deployment), run the gates in *every* repo you touched, plus the tests that exercise the whole path end to end.
+A task is done when these pass. Do not run the full gate just to finish a task or to commit.
+
+1. **The feature itself:** add or extend automated tests for every behaviour you added or changed (happy path, failure paths, edge cases).
+2. **Run only the related tests**, not the whole suite: `cargo test --test <area>_test` for the files covering the change and `cargo test --lib <module path>` for unit tests; run `pos/backend`'s schema-drift tests (`print_payload::schema_drift_tests`) whenever a template contract changes.
+3. **Static checks:** `cargo fmt --all`, then `cargo clippy --all-targets --all-features -- -D warnings` once at the end of the task.
 4. **For real:** what automated tests cannot reach (UI behaviour, a running stack, long-lived connections, a deploy) is verified by running it: the local Docker stack (`LOCAL_DOCKER_GUIDE.md` at the workspace root), the desktop app, or the browser.
-5. **Match CI's toolchain:** CI uses the latest stable Rust/Node. A lint that passes on an older local toolchain can still fail there, so update (`rustup update`) or run the gate with CI's version before calling it done.
-6. **Report honestly:** say what you ran and its result. Anything you could not test is named, with the reason, and never presented as passing. A suite that silently skips (e.g. no database configured) is not a passing suite.
 
-**This repo's gate:** `make check` (`cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, `cargo test`), plus `pos/backend`'s schema-drift tests (`print_payload::schema_drift_tests`) whenever a template contract changes.
+### Before a push (once)
 
-**Run all of these before you say a task is finished** (a backend feature once reached CI with clippy errors, a permission that was too wide and undocumented routes, none of which a partial run catches):
-
-1. `cargo clippy --all-targets --all-features -- -D warnings` on the current stable Rust (`rustup update` first). This is exactly what CI runs; `cargo clippy --fix --allow-dirty` clears most of it. `cargo build`/`cargo test` alone do not run clippy.
-2. The **whole** `cargo test` (`--no-fail-fast`, so one failing binary does not hide the rest), then `pos/backend`'s schema-drift tests (`print_payload::schema_drift_tests`) whenever a template contract changes.
-3. New or changed routes: keep their OpenAPI/auth annotations in step with what the handler really enforces, and test the failure paths.
+1. **Full gate**, in this repo: `make check` (`cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings`, `cargo test`).
+2. **Across repos:** when a feature spans repos (backend, frontend, desktop shell, document-server, identity-server, app-frontend, deployment), run the full gate in _every_ repo you touched, plus the tests that exercise the whole path end to end.
+3. **Match CI's toolchain:** CI uses the latest stable Rust/Node. A lint that passes on an older local toolchain can still fail there, so update (`rustup update`) or run the gate with CI's version.
 4. After pushing, watch the run (`gh run list --limit 3`, `gh run view <id> --log-failed`) until it is green. Pushing is a separate, deliberate step, so ask first.
+
+**Report honestly:** say what you ran and its result, and say when the full gate has not been run yet. Anything you could not test is named, with the reason, and never presented as passing. A suite that silently skips (e.g. no database configured) is not a passing suite.
+
+**Every change:** new or changed routes keep their OpenAPI/auth annotations in step with what the handler really enforces, with the failure paths tested.
 
 # Commands
 
 - `cargo build` / `cargo run` (equivalent to `cargo run --bin document_server`)
 - `cargo test` — every test needs no external service: `tests/*_test.rs` open their own throwaway SQLite file per test (see `tests/common::spawn_app()`), and the `#[cfg(test)]` unit tests in `src/clients/render.rs` exercise the real Typst compiler against the real `templates/`/`fonts/` directories.
 - `cargo fmt` / `cargo fmt --check`
-- `make check` — `cargo fmt --check` → `cargo clippy --all-targets --all-features -- -D warnings` → `cargo test`, stopping at first failure. Run after every change.
+- `make check` — `cargo fmt --check` → `cargo clippy --all-targets --all-features -- -D warnings` → `cargo test`, stopping at first failure. Run once before a push; while working, run only the related tests.
 
 **Every change must be tested** — extend the existing test file covering the touched area, or create one following `tests/<area>_test.rs` naming.
 

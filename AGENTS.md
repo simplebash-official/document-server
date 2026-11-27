@@ -13,7 +13,7 @@ A standalone Rust/Axum service that renders PDFs from Typst templates (embedded 
 - `cargo build` / `cargo run` (equivalent to `cargo run --bin document_server`)
 - `cargo test` — every test needs no external service: `tests/*_test.rs` open their own throwaway SQLite file per test (see `tests/common::spawn_app()`), and the `#[cfg(test)]` unit tests in `src/clients/render.rs` exercise the real Typst compiler against the real `templates/`/`fonts/` directories.
 - `cargo fmt` / `cargo fmt --check`
-- `make check` — `cargo fmt --check` → `cargo clippy --all-targets --all-features -- -D warnings` → `cargo test`, stopping at first failure. Run after every change.
+- `make check` — `cargo fmt --check` → `cargo clippy --all-targets --all-features -- -D warnings` → `cargo test`, stopping at first failure. Run once before a push; while working, run only the related tests.
 
 **Every change must be tested** — extend the existing test file covering the touched area, or create one following `tests/<area>_test.rs` naming.
 
