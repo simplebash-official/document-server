@@ -1408,46 +1408,82 @@ fn sample_job_receipt_data() -> serde_json::Value {
         .expect("job receipt sample is JSON")
 }
 
+/// `count` jobs made from the sample's two, each with its own ticket number.
+fn job_receipt_jobs(count: usize) -> serde_json::Value {
+    let sample = sample_job_receipt_data();
+    let jobs: Vec<serde_json::Value> = (0..count)
+        .map(|index| {
+            let mut job = sample["jobs"][index % 2].clone();
+            let number = format!("REP-{index:06}");
+            job["ticketNumber"] = serde_json::json!(number);
+            job["qrData"] = serde_json::json!(number);
+            job
+        })
+        .collect();
+    serde_json::Value::Array(jobs)
+}
+
 #[tokio::test]
-async fn job_receipt_renders_on_every_paper_with_and_without_the_optional_parts() {
+async fn job_receipt_renders_one_or_many_jobs_on_every_paper() {
     let app = common::spawn_app().await;
     for paper in ["a5", "thermal-58", "thermal-80"] {
-        let mut data = sample_job_receipt_data();
-        data["paper"] = serde_json::json!(paper);
-        let (status, pdf) = render_by_description(&app, "Job Receipt", data.clone()).await;
-        assert_eq!(status, StatusCode::OK, "{paper}");
-        assert!(pdf.starts_with(b"%PDF-"), "{paper}: not a PDF");
+        for count in [1, 3, 20] {
+            let mut data = sample_job_receipt_data();
+            data["paper"] = serde_json::json!(paper);
+            data["jobs"] = job_receipt_jobs(count);
+            let (status, pdf) = render_by_description(&app, "Job Receipt", data.clone()).await;
+            assert_eq!(status, StatusCode::OK, "{paper} x{count}");
+            assert!(pdf.starts_with(b"%PDF-"), "{paper} x{count}: not a PDF");
 
-        // A print job with nothing quoted, no terms, no pickup warning and no ready-by day.
-        data["jobKind"] = serde_json::json!("print");
-        data["serialNumber"] = serde_json::json!("");
-        data["itemLines"] = serde_json::json!([]);
-        data["estimateCents"] = serde_json::Value::Null;
-        data["promisedReadyOn"] = serde_json::Value::Null;
-        data["termsText"] = serde_json::json!("");
-        data["uncollectedAfterDays"] = serde_json::Value::Null;
-        let (status, _) = render_by_description(&app, "Job Receipt", data.clone()).await;
-        assert_eq!(status, StatusCode::OK, "{paper} bare print job");
+            // Print jobs with nothing quoted, no total, terms, pickup warning or ready-by day.
+            for job in data["jobs"].as_array_mut().expect("jobs are an array") {
+                job["jobKind"] = serde_json::json!("print");
+                job["serialNumber"] = serde_json::json!("");
+                job["itemLines"] = serde_json::json!([]);
+                job["estimateCents"] = serde_json::Value::Null;
+                job["promisedReadyOn"] = serde_json::Value::Null;
+            }
+            data["estimateTotalCents"] = serde_json::Value::Null;
+            data["termsText"] = serde_json::json!("");
+            data["uncollectedAfterDays"] = serde_json::Value::Null;
+            let (status, _) = render_by_description(&app, "Job Receipt", data.clone()).await;
+            assert_eq!(status, StatusCode::OK, "{paper} x{count} bare print jobs");
 
-        // Free warranty rework.
-        data["isWarrantyRework"] = serde_json::json!(true);
-        let (status, _) = render_by_description(&app, "Job Receipt", data).await;
-        assert_eq!(status, StatusCode::OK, "{paper} rework");
+            // Free warranty rework.
+            data["jobs"][0]["isWarrantyRework"] = serde_json::json!(true);
+            let (status, _) = render_by_description(&app, "Job Receipt", data).await;
+            assert_eq!(status, StatusCode::OK, "{paper} x{count} rework");
+        }
     }
 }
 
 #[tokio::test]
-async fn job_receipt_rejects_an_unknown_paper_and_missing_fields() {
+async fn job_receipt_rejects_an_unknown_paper_no_jobs_too_many_and_missing_fields() {
     let app = common::spawn_app().await;
     let mut data = sample_job_receipt_data();
     data["paper"] = serde_json::json!("a4");
     let (status, _) = render_by_description(&app, "Job Receipt", data).await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
 
+    for jobs in [job_receipt_jobs(0), job_receipt_jobs(21)] {
+        let mut data = sample_job_receipt_data();
+        data["jobs"] = jobs;
+        let (status, _) = render_by_description(&app, "Job Receipt", data).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    }
+
+    let mut data = sample_job_receipt_data();
+    data["jobs"][1]
+        .as_object_mut()
+        .expect("a job is an object")
+        .remove("ticketNumber");
+    let (status, _) = render_by_description(&app, "Job Receipt", data).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+
     let (status, _) = render_by_description(
         &app,
         "Job Receipt",
-        serde_json::json!({"paper": "a5", "ticketNumber": "REP-1"}),
+        serde_json::json!({"paper": "a5", "jobs": []}),
     )
     .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);

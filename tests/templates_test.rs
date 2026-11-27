@@ -131,14 +131,17 @@ async fn list_templates_returns_every_bundled_template_with_type_and_expected_da
     assert_eq!(job_receipt_tpl["type"], "document");
     assert_eq!(job_receipt_tpl["kind"], "job-receipt");
     assert_eq!(job_receipt_tpl["isDefault"], true);
-    assert_eq!(job_receipt_tpl["data"]["ticketNumber"], "REP-000123");
+    assert_eq!(
+        job_receipt_tpl["data"]["jobs"][0]["ticketNumber"],
+        "REP-000123"
+    );
     let job_receipt_required = job_receipt_tpl["dataSchema"]["required"]
         .as_array()
         .unwrap();
     for field in [
         "paper",
-        "ticketNumber",
-        "estimateCents",
+        "jobs",
+        "estimateTotalCents",
         "uncollectedAfterDays",
     ] {
         assert!(
