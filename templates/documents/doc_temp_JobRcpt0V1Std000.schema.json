@@ -3,25 +3,15 @@
   "title": "Job Receipt",
   "x-document-kind": "job-receipt",
   "x-default": true,
-  "description": "Input contract for the Job Receipt template: the slip a customer gets when the shop receives a repair or a print job, printed on A5 or on a 58/80 mm receipt roll (`paper`). Strings that do not apply are \"\"; a figure or date that does not apply is null. See the sibling .json for a worked example.",
+  "description": "Input contract for the Job Receipt template: the slip a customer gets when the shop receives one or more repair or print jobs from them, printed on A5 or on a 58/80 mm receipt roll (`paper`). Strings that do not apply are \"\"; a figure or date that does not apply is null. See the sibling .json for a worked example.",
   "type": "object",
   "additionalProperties": true,
   "required": [
     "paper",
-    "ticketNumber",
-    "jobKind",
-    "receivedOn",
-    "receivedAt",
     "customerName",
     "customerPhone",
-    "title",
-    "detail",
-    "serialNumber",
-    "itemLines",
-    "estimateCents",
-    "promisedReadyOn",
-    "isWarrantyRework",
-    "qrData",
+    "jobs",
+    "estimateTotalCents",
     "termsText",
     "uncollectedAfterDays",
     "shopTradingName",
@@ -49,72 +39,106 @@
     "logoWidth": {
       "type": "number"
     },
-    "ticketNumber": {
-      "type": "string",
-      "description": "REP-000123 or PRN-000123; the customer quotes it and it is printed as a QR code the till scans."
-    },
-    "jobKind": {
-      "type": "string",
-      "enum": [
-        "repair",
-        "print"
-      ]
-    },
-    "receivedOn": {
-      "type": "string",
-      "description": "The day the job was received in the shop's own time zone, e.g. 20 Nov 2026."
-    },
-    "receivedAt": {
-      "type": "string",
-      "description": "The time the job was received in the shop's own time zone, e.g. 14:35."
-    },
     "customerName": {
       "type": "string"
     },
     "customerPhone": {
       "type": "string"
     },
-    "title": {
-      "type": "string",
-      "description": "Repair: the device. Print job: the kind of print."
-    },
-    "detail": {
-      "type": "string",
-      "description": "Repair: what the customer reported. Print job: the quantity and kind, e.g. 20 × Mug."
-    },
-    "serialNumber": {
-      "type": "string",
-      "description": "Serial number or IMEI of the device; \"\" for none and for print jobs."
-    },
-    "itemLines": {
+    "jobs": {
       "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "description": "The jobs on this slip, all of the one customer, in the order to print them. One job prints as a single receipt; several print one block each, with its own QR code.",
       "items": {
-        "type": "string"
-      },
-      "description": "Repair: what the shop plans to do, one line per piece of work. Print job: empty."
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "ticketNumber",
+          "jobKind",
+          "receivedOn",
+          "receivedAt",
+          "title",
+          "detail",
+          "serialNumber",
+          "itemLines",
+          "estimateCents",
+          "promisedReadyOn",
+          "isWarrantyRework",
+          "qrData"
+        ],
+        "properties": {
+          "ticketNumber": {
+            "type": "string",
+            "description": "REP-000123 or PRN-000123; the customer quotes it and it is printed as a QR code the till scans."
+          },
+          "jobKind": {
+            "type": "string",
+            "enum": [
+              "repair",
+              "print"
+            ]
+          },
+          "receivedOn": {
+            "type": "string",
+            "description": "The day the job was received in the shop's own time zone, e.g. 20 Nov 2026."
+          },
+          "receivedAt": {
+            "type": "string",
+            "description": "The time the job was received in the shop's own time zone, e.g. 14:35."
+          },
+          "title": {
+            "type": "string",
+            "description": "Repair: the device. Print job: the kind of print."
+          },
+          "detail": {
+            "type": "string",
+            "description": "Repair: what the customer reported. Print job: the quantity and kind, e.g. 20 × Mug."
+          },
+          "serialNumber": {
+            "type": "string",
+            "description": "Serial number or IMEI of the device; \"\" for none and for print jobs."
+          },
+          "itemLines": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "What the shop plans to do, one line per piece of work; a print job's line ends in its quantity."
+          },
+          "estimateCents": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "description": "The estimate in cents; null when nothing is quoted yet."
+          },
+          "promisedReadyOn": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The day the shop promised the job would be ready, e.g. 27 Nov 2026; null when none was agreed."
+          },
+          "isWarrantyRework": {
+            "type": "boolean",
+            "description": "Free work redoing an earlier job under its warranty; the slip says there is no charge."
+          },
+          "qrData": {
+            "type": "string",
+            "description": "What this job's QR code holds: its ticket number, which the till scans."
+          }
+        }
+      }
     },
-    "estimateCents": {
+    "estimateTotalCents": {
       "type": [
         "integer",
         "null"
       ],
       "minimum": 0,
-      "description": "The estimate in cents; null when nothing is quoted yet."
-    },
-    "promisedReadyOn": {
-      "type": [
-        "string",
-        "null"
-      ],
-      "description": "The day the shop promised the job would be ready, e.g. 27 Nov 2026; null when none was agreed."
-    },
-    "isWarrantyRework": {
-      "type": "boolean",
-      "description": "Free work redoing an earlier job under its warranty; the slip says there is no charge."
-    },
-    "qrData": {
-      "type": "string",
-      "description": "What the QR code holds: the ticket number."
+      "description": "The estimates of the jobs added up; null for a single job and while a job that will be charged has no estimate."
     },
     "termsText": {
       "type": "string",
